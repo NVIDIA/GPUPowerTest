@@ -1,0 +1,35 @@
+//
+//
+// https://mpitutorial.com/tutorials/mpi-send-and-receive/
+
+#include <mpi.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+int main(int argc, char** argv) {
+
+  MPI_Init(NULL, NULL);
+
+  int world_rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+  int world_size;
+  MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+  int *send_number = (int *) malloc(4 * sizeof(int));
+  int *recv_number = (int *) malloc(4 * sizeof(int));
+  int rtn = -1;
+  for (int ix = 0; ix < 4; ix++) send_number[ix] = 10 - ix;
+  if (world_rank == 0) {
+      rtn = MPI_Scatter(&send_number[0], 1, MPI_INT, &recv_number[0], 1, MPI_INT, 0, MPI_COMM_WORLD);
+      printf("After MPI_Scatter, rtn %d\n", rtn);
+  } 
+  printf("Before Scatter\n");
+  rtn = MPI_Scatter(&send_number[world_rank], 0, MPI_INT, &recv_number[world_rank], 1, MPI_INT, 0, MPI_COMM_WORLD);
+  printf("Process %d received number %d from process 0 rtn %d\n",
+          world_rank, recv_number[world_rank], rtn);
+  
+  MPI_Finalize();
+  free(recv_number);
+  free(send_number);
+}
+
+
