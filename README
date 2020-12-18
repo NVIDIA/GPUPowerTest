@@ -2,9 +2,9 @@
 # mpirun
 # -np N    ;total number of GPU to engage
 # -H  h:n  ;comma separated host:count where sum(count) = N
-# ./gpt.sh <seconds-to-run>
+# ./gpt -t <seconds-to-run>
 # example:
-# mpirun --allow-run-as-root -np 4 -H localhost:4 ./gpt.sh 30
+# mpirun --allow-run-as-root -np 2 -H localhost:2 ./gpt -t 10
 
 
 

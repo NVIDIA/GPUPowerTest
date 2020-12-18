@@ -22,28 +22,35 @@ void sig_usr1()
 
 void *launch_kernel(void *input_gpu)
 {
-    int i = 0;
     int gpu = *((int *) input_gpu);
     pthread_t ptid;
     ptid = pthread_self();
+//    int mpi_rank = MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
     printf("Launching GPU Kernel, Thread ID %ld GPU %d\n", 
             ptid, gpu);
     int rtn = MPI_Barrier(MPI_COMM_WORLD);
     burn(gpu);
 }
 
+
 int main(int argc, char *argv[])
 {
+    MPI_Init(NULL, NULL);
+
     struct timespec ts_start, ts_end;
     struct sigaction act;
     struct sigevent   ev;
 
-    MPI_Init(NULL, NULL);
 
     int load_time = 60;
     int gpus[MAX_GPUS] = { 0, 1, 2, 3, 4, 5, 6, 7 };
     int gpu_cnt = 0;
     int opt, n, g, i, ret;
+
+    int mpi_rank = MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
+    char* mpi_local_rank = getenv ("OMPI_COMM_WORLD_LOCAL_RANK");
+    int gpu = (mpi_local_rank) ? atoi(mpi_local_rank) : 0;
+    printf("OMPI_COMM_WORLD_LOCAL_RANK %s GPU %d mpi_rank %d\n", mpi_local_rank, gpu, mpi_rank);
 
     pthread_t tids[MAX_GPUS];
     pthread_attr_t attr;
@@ -81,10 +88,15 @@ int main(int argc, char *argv[])
     } else /* no GPU args so use defaut */
         gpu_cnt = MAX_GPUS;
 
+/*
     printf("load_time: %d, Loading %d GPUs, Index ", load_time, gpu_cnt);
     for (i = 0; i < gpu_cnt; i++)
         printf("%d ",gpus[i]);
+        printf("%d ",gpu);
     printf("\n\n");
+*/
+
+    printf("load_time: %d, Loading %d GPU %d\n", load_time, gpu);
 
     pthread_attr_init(&attr);
     ev.sigev_notify = SIGEV_SIGNAL;
@@ -94,8 +106,11 @@ int main(int argc, char *argv[])
     act.sa_sigaction = sig_usr1;
     (void) sigaction(SIGUSR1, &act, NULL);
 
+// (void *) &gpus[i]
+
+    gpu_cnt = 1;
     for (i=0; i < gpu_cnt; i++) {
-        ret = pthread_create(&tids[i], &attr, launch_kernel, (void *) &gpus[i]);
+        ret = pthread_create(&tids[i], &attr, launch_kernel, (void *) &gpu);
         if (ret != 0) {
             perror("pthread_create");
             exit(0);
