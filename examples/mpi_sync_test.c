@@ -9,6 +9,10 @@
 int main(int argc, char** argv) {
 
   MPI_Init(NULL, NULL);
+  int initiallzed = -1;
+  (void) MPI_Initialized(&initiallzed);
+  printf("MPI initilized %d\n", initiallzed);
+
 
   int world_rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);

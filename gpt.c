@@ -25,7 +25,8 @@ void *launch_kernel(void *input_gpu)
     int gpu = *((int *) input_gpu);
     pthread_t ptid;
     ptid = pthread_self();
-    int mpi_rank = MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
+    int mpi_rank = -1;
+    (void) MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
     printf("Launching GPU Kernel, Thread ID %ld GPU %d mpi_rank %d\n", 
             ptid, gpu, mpi_rank);
     int rtn = MPI_Barrier(MPI_COMM_WORLD);
@@ -35,7 +36,13 @@ void *launch_kernel(void *input_gpu)
 
 int main(int argc, char *argv[])
 {
-    MPI_Init(NULL, NULL);
+//    MPI_Init(NULL, NULL);
+
+    int provided = -1;
+    (void) MPI_Init_thread(NULL, NULL, MPI_THREAD_MULTIPLE, &provided);
+    int initiallzed = -1;
+    (void) MPI_Initialized(&initiallzed);
+    printf("MPI initilized with provided %d initialzed %d\n", provided, initiallzed);
 
     struct timespec ts_start, ts_end;
     struct sigaction act;
@@ -47,8 +54,10 @@ int main(int argc, char *argv[])
     int gpu_cnt = 0;
     int opt, n, g, i, ret;
 
-    int mpi_rank = MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
-    int mpi_size = MPI_Comm_rank(MPI_COMM_WORLD, &mpi_size);
+    int mpi_rank = -1;
+    (void) MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
+    int mpi_size = -1;
+    (void) MPI_Comm_rank(MPI_COMM_WORLD, &mpi_size);
     char* mpi_local_rank = getenv ("OMPI_COMM_WORLD_LOCAL_RANK");
     int gpu = (mpi_local_rank) ? atoi(mpi_local_rank) : 0;
     printf("OMPI_COMM_WORLD_LOCAL_RANK %s GPU %d mpi_rank %d mpi_size %d\n", 
