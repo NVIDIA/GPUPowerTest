@@ -36,13 +36,12 @@ void *launch_kernel(void *input_gpu)
 
 int main(int argc, char *argv[])
 {
-//    MPI_Init(NULL, NULL);
-
     int provided = -1;
     (void) MPI_Init_thread(NULL, NULL, MPI_THREAD_MULTIPLE, &provided);
     int initiallzed = -1;
     (void) MPI_Initialized(&initiallzed);
     printf("MPI initilized with provided %d initialzed %d\n", provided, initiallzed);
+
 
     struct timespec ts_start, ts_end;
     struct sigaction act;
@@ -126,6 +125,8 @@ int main(int argc, char *argv[])
         }
     }
     printf("threads created...\n");
+    int rtn = MPI_Barrier(MPI_COMM_WORLD);
+    
     sleep(load_time);
     printf("awake...\n");
     for (i=0; i < gpu_cnt; i++) {
