@@ -1,0 +1,30 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/dgx2/dfisk/GPUPowerTestDvlp/gpt.c
+sys/time.h
+-
+stdio.h
+-
+fcntl.h
+-
+unistd.h
+-
+stdlib.h
+-
+string.h
+-
+signal.h
+-
+time.h
+-
+pthread.h
+-
+mpi.h
+-
+

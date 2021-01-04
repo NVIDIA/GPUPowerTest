@@ -1,0 +1,3 @@
+/home/dgx2/dfisk/GPUPowerTestDvlp/build/CMakeFiles/rebuild_cache.dir
+/home/dgx2/dfisk/GPUPowerTestDvlp/build/CMakeFiles/gpt.dir
+/home/dgx2/dfisk/GPUPowerTestDvlp/build/CMakeFiles/edit_cache.dir
