@@ -6,7 +6,7 @@
 
 #IncludeRegexTransform: 
 
-/home/dgx2/dfisk/GPUPowerTestDvlp/gpt.c
+/home/dfisk/GPUPowerTestDvlp/gpt.c
 sys/time.h
 -
 stdio.h

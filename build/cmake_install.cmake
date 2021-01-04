@@ -1,4 +1,4 @@
-# Install script for directory: /home/dgx2/dfisk/GPUPowerTestDvlp
+# Install script for directory: /home/dfisk/GPUPowerTestDvlp
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -45,5 +45,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "/home/dgx2/dfisk/GPUPowerTestDvlp/build/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "/home/dfisk/GPUPowerTestDvlp/build/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
