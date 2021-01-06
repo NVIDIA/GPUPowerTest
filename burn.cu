@@ -189,15 +189,15 @@ public:
                 exit(-1);
             }
 
+            curandGenerator_t prngGPU;
+            CURAND_CALL(curandCreateGenerator(&prngGPU, CURAND_RNG_PSEUDO_MRG32K3A));
+            CURAND_CALL(curandSetPseudoRandomGeneratorSeed(prngGPU, 777));
+            CURAND_CALL(curandGenerateUniform(prngGPU, (float *) A, As));
+            CURAND_CALL(curandGenerateUniform(prngGPU, (float *) B, Bs));
+            CURAND_CALL(curandGenerateUniform(prngGPU, (float *) C, Cs));
+
             while (true) {
 
-                int seed = 0;
-                curandGenerator_t prngGPU;
-                CURAND_CALL(curandCreateGenerator(&prngGPU, CURAND_RNG_PSEUDO_MRG32K3A));
-                CURAND_CALL(curandSetPseudoRandomGeneratorSeed(prngGPU, seed++));
-                CURAND_CALL(curandGenerateUniform(prngGPU, (float *) A, As));
-                CURAND_CALL(curandGenerateUniform(prngGPU, (float *) B, Bs));
-                CURAND_CALL(curandGenerateUniform(prngGPU, (float *) C, Cs));
                 cublas_status = cublasLtMatmul(handle,
                         matmulDesc,
                     &alpha,
