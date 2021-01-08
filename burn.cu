@@ -5,6 +5,8 @@
 #include <cublasLt.h>
 #include <cuda_bf16.h>
 #include <curand.h>
+#include <unistd.h>
+#include <mpi.h>
 
 #define CHECK_ERROR(error) \
     if (error != cudaSuccess) { \
@@ -22,7 +24,7 @@ using std::endl;
 
 #ifdef __cplusplus
 extern "C" {
-    void burn(int gpu);
+    void burn(int gpu, int u_secs, int d_secs);
 }
 #endif
 
@@ -65,13 +67,19 @@ private:
     const cublasOperation_t op = CUBLAS_OP_N;
     const int ld = SEED;
     cublasLtOrder_t order = CUBLASLT_ORDER_COL;
+    // for the square wave
+    int up_seconds;
+    int down_seconds;
 
 public:
-    BurnGPU(int gpu) {
+    BurnGPU(int gpu, int u_secs, int d_secs) {
         cudaDeviceProp devprop {};
         CHECK_ERROR(cudaSetDevice(gpu));
         CHECK_ERROR(cudaGetDeviceProperties(&devprop, gpu));
         cout << "Found GPU " << gpu << " " << devprop.name << endl;
+
+	up_seconds = u_secs;
+	down_seconds = d_secs;
 
         CHECK_ERROR((cudaMalloc((void**)&A, As)));
         CHECK_ERROR((cudaMalloc((void**)&B, Bs)));
@@ -196,8 +204,12 @@ public:
             CURAND_CALL(curandGenerateUniform(prngGPU, (float *) B, Bs));
             CURAND_CALL(curandGenerateUniform(prngGPU, (float *) C, Cs));
 
-            while (true) {
-
+            // On A100, the average time for the GEMM kernel to complete is ~ 12ms
+	    // So set the iteration count based on 83 executions per second 
+	    int cnt = (83 * up_seconds);
+	    int iterations = cnt;
+	    int usleep_time = (down_seconds * 1000000);
+            while (iterations) {
                 cublas_status = cublasLtMatmul(handle,
                         matmulDesc,
                     &alpha,
@@ -219,6 +231,12 @@ public:
                         << cublas_status << endl;
                     exit(-1);
                 }
+		iterations--;
+		if (iterations == 0) {
+		    usleep(usleep_time);
+		    iterations = cnt;
+	        }
+		int rtn = MPI_Barrier(MPI_COMM_WORLD);
             }
             CHECK_ERROR(cudaDeviceSynchronize());
 
@@ -274,8 +292,9 @@ public:
 
 };
 
-void burn(int gpu) {
-    BurnGPU *burngpu = new BurnGPU(gpu);
+void burn(int gpu, int u_secs, int d_secs) {
+    printf("BURN, gpu: %d, up seconds: %d, down_seconds: %d\n",gpu,u_secs,d_secs);
+    BurnGPU *burngpu = new BurnGPU(gpu, u_secs, d_secs);
     (*burngpu)();
 }
 

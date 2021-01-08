@@ -11,26 +11,36 @@
 
 #define MAX_GPUS 8
 #define MAX_GPU_INDEX 7
+#define SECSINADAY (24 * (60 * 60))
 
-void burn(int gpu);
+struct gpt_args {
+    int gpu;
+    int up_secs;
+    int down_secs;
+};
+
+void burn(int gpu, int upsecs, int downsecs);
 
 void sig_usr1()
 {
-    printf("SIGUSR1 signal, thread exiting...\n");
+    /* printf("Timer fired, thread exiting...\n"); */
     pthread_exit((void *)NULL);
 }
 
-void *launch_kernel(void *input_gpu)
+void *launch_kernel(struct gpt_args *gargs)
 {
-    int gpu = *((int *) input_gpu);
+    /* int gpu = *((int *) input_gpu); */
     pthread_t ptid;
     ptid = pthread_self();
     int mpi_rank = -1;
     (void) MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
-    printf("Launching GPU Kernel, Thread ID %ld GPU %d mpi_rank %d\n", 
-            ptid, gpu, mpi_rank);
     int rtn = MPI_Barrier(MPI_COMM_WORLD);
-    burn(gpu);
+
+    /*
+    printf("Launching GPU Kernel, Thread ID %ld GPU %d mpi_rank %d\n", 
+            ptid, gargs->gpu, mpi_rank);
+    */
+    burn(gargs->gpu, gargs->up_secs, gargs->down_secs);
 }
 
 
@@ -40,7 +50,7 @@ int main(int argc, char *argv[])
     (void) MPI_Init_thread(NULL, NULL, MPI_THREAD_MULTIPLE, &provided);
     int initiallzed = -1;
     (void) MPI_Initialized(&initiallzed);
-    printf("MPI initilized with provided %d initialzed %d\n", provided, initiallzed);
+    /* printf("MPI initilized with provided %d initialzed %d\n", provided, initiallzed); */
 
 
     struct timespec ts_start, ts_end;
@@ -48,10 +58,11 @@ int main(int argc, char *argv[])
     struct sigevent   ev;
 
 
-    int load_time = 60;
+    int up = 0, down = 0, load_time = 60;
     int gpus[MAX_GPUS] = { 0, 1, 2, 3, 4, 5, 6, 7 };
     int gpu_cnt = 0;
     int opt, n, g, i, ret;
+    struct gpt_args gargs;
 
     int mpi_rank = -1;
     (void) MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
@@ -59,15 +70,31 @@ int main(int argc, char *argv[])
     (void) MPI_Comm_rank(MPI_COMM_WORLD, &mpi_size);
     char* mpi_local_rank = getenv ("OMPI_COMM_WORLD_LOCAL_RANK");
     int gpu = (mpi_local_rank) ? atoi(mpi_local_rank) : 0;
+    /*
     printf("OMPI_COMM_WORLD_LOCAL_RANK %s GPU %d mpi_rank %d mpi_size %d\n", 
             mpi_local_rank, gpu, mpi_rank, mpi_size);
+    */
 
     pthread_t tids[MAX_GPUS];
     pthread_attr_t attr;
 
     if (argc > 1) {
-        while ((opt = getopt(argc, argv, ":t:i:")) != -1) {
+        while ((opt = getopt(argc, argv, ":u:d:t:i:")) != -1) {
             switch(opt) {
+		case 'u':
+		    up = atoi(optarg);
+		    if (up <= 0) {
+	 	        printf("Invalid up duration value: %d\n",up);
+		        exit(0);
+		    }
+		    break;
+		case 'd':
+		    down = atoi(optarg);
+		    if (down <= 0) {
+	 	        printf("Invalid down duration value: %d\n",down);
+		        exit(0);
+		    }
+		    break; 
                 case 't':
                     load_time = atoi(optarg);
                     break;
@@ -91,22 +118,21 @@ int main(int argc, char *argv[])
                     }
                     break;
                 default:
-                    printf("Usage: %s [ -t load_time_seconds ] [ -i comma-seprated GPU list ]\n",argv[0]);
+                    printf("Usage: %s -u <power load up duration seconds> -d <power load down duration seconds> -t <load test duration seconds>  [ -i comma-seprated GPU list ]\n",argv[0]);
                     exit(0);
             }
         }
     } else /* no GPU args so use defaut */
         gpu_cnt = MAX_GPUS;
 
-/*
-    printf("load_time: %d, Loading %d GPUs, Index ", load_time, gpu_cnt);
-    for (i = 0; i < gpu_cnt; i++)
-        printf("%d ",gpus[i]);
-        printf("%d ",gpu);
-    printf("\n\n");
-*/
-
-    printf("load_time: %d sec., GPU %d\n", load_time, gpu);
+    if ((up + down) > load_time) {
+	printf("up/down cycle time exceeds total load time\n");
+	exit(0);
+    }
+    gargs.gpu = gpu;
+    gargs.up_secs = up;
+    gargs.down_secs = down;
+    /* printf("up: %d seconds, down: %d seconds, load_time: %d seconds\n", gargs.up_secs, gargs.down_secs, load_time); */
 
     pthread_attr_init(&attr);
     ev.sigev_notify = SIGEV_SIGNAL;
@@ -118,19 +144,20 @@ int main(int argc, char *argv[])
 
     gpu_cnt = 1;
     for (i=0; i < gpu_cnt; i++) {
-        ret = pthread_create(&tids[i], &attr, launch_kernel, (void *) &gpu);
+        ret = pthread_create(&tids[i], &attr, launch_kernel, (struct gpt_args *) &gargs);
         if (ret != 0) {
             perror("pthread_create");
             exit(0);
         }
     }
-    printf("threads created...\n");
+    /* printf("threads created...\n"); */
+
     int rtn = MPI_Barrier(MPI_COMM_WORLD);
     
     sleep(load_time);
-    printf("awake...\n");
+    printf("Specified run load time (-t %d) reached\n",load_time);
     for (i=0; i < gpu_cnt; i++) {
-            ret=pthread_kill(tids[i], SIGUSR1);
+            ret = pthread_kill(tids[i], SIGUSR1);
             if (ret != 0)
                 perror("pthread_kill");
     }
@@ -138,7 +165,7 @@ int main(int argc, char *argv[])
         pthread_join(tids[i], (void **)NULL);
     }
 
-    printf("MAIN Exiting...\n");
+    printf("GPT Exiting...\n");
     MPI_Finalize();
 }
 

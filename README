@@ -1,10 +1,16 @@
 # Synopsis:
+# gpt generates load on GPUs for power testing. The "-u" and "-d" flags are the
+# power up/down duration to facilitate generating load in the form of a square wave.
+#
 # mpirun
 # -np N    ;total number of GPU to engage
 # -H  h:n  ;comma separated host:count where sum(count) = N
-# ./gpt -t <seconds-to-run>
+# ./gpt -u <power load/up seconds> -d <no power load/down seconds> -t <total seconds-to-run>
 # example:
-# mpirun --allow-run-as-root -np 2 -H localhost:2 ./gpt -t 10
+# mpirun --allow-run-as-root -np 2 -H localhost:2 ./gpt -u 4 -d 6 -t 60
+#
+# The above will cycle GPU power up for 4 seconds, no load for 6 seconds continuously
+# until the total 60 second run time is reached.
 
 
 
