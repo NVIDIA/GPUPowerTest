@@ -6,6 +6,7 @@
 #include <cuda_bf16.h>
 #include <curand.h>
 #include <unistd.h>
+#include <time.h>
 #include <mpi.h>
 
 #define CHECK_ERROR(error) \
@@ -209,6 +210,9 @@ public:
 	    int cnt = (83 * up_seconds);
 	    int iterations = cnt;
 	    int usleep_time = (down_seconds * 1000000);
+	    time_t t;
+	    time(&t);
+	    printf("%sEntering loop. Up: %d seconds. Down: %d seconds\n",(ctime(&t)),up_seconds,down_seconds);
             while (iterations) {
                 cublas_status = cublasLtMatmul(handle,
                         matmulDesc,
@@ -233,8 +237,10 @@ public:
                 }
 		iterations--;
 		if (iterations == 0) {
+                    CHECK_ERROR(cudaDeviceSynchronize());
 		    usleep(usleep_time);
 		    iterations = cnt;
+		    // int rtn = MPI_Barrier(MPI_COMM_WORLD);
 	        }
 		int rtn = MPI_Barrier(MPI_COMM_WORLD);
             }
@@ -293,7 +299,7 @@ public:
 };
 
 void burn(int gpu, int u_secs, int d_secs) {
-    printf("BURN, gpu: %d, up seconds: %d, down_seconds: %d\n",gpu,u_secs,d_secs);
+    // printf("BURN, gpu: %d, up seconds: %d, down_seconds: %d\n",gpu,u_secs,d_secs);
     BurnGPU *burngpu = new BurnGPU(gpu, u_secs, d_secs);
     (*burngpu)();
 }
