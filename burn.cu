@@ -240,21 +240,18 @@ public:
                     CHECK_ERROR(cudaDeviceSynchronize());
 		    usleep(usleep_time);
 		    iterations = cnt;
-		    // int rtn = MPI_Barrier(MPI_COMM_WORLD);
+		    int rtn = MPI_Barrier(MPI_COMM_WORLD);
 	        }
-		int rtn = MPI_Barrier(MPI_COMM_WORLD);
+		// int rtn = MPI_Barrier(MPI_COMM_WORLD);
             }
             CHECK_ERROR(cudaDeviceSynchronize());
 
-/*
-            cout << "Done" << endl;
-*/
-                    cublas_status = cublasLtDestroy(handle);
-                    if (cublas_status != CUBLAS_STATUS_SUCCESS) {
-                            cout << "cublasLtDestroy failed "
-                                    << cublas_status << endl;
-                            exit(-1);
-                    }
+            cublas_status = cublasLtDestroy(handle);
+            if (cublas_status != CUBLAS_STATUS_SUCCESS) {
+                cout << "cublasLtDestroy failed "
+                        << cublas_status << endl;
+                exit(-1);
+            }
         }
         catch (std::exception& e) {
             cout << "ERROR:" << e.what() << endl;
