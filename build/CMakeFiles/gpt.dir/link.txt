@@ -1,1 +1,1 @@
-/usr/bin/g++  CMakeFiles/gpt.dir/gpt.c.o CMakeFiles/gpt.dir/burn.cu.o -o gpt  -lcublasLt -lmpi -lcurand -lcudadevrt -lcudart_static  -L"/usr/local/cuda/targets/x86_64-linux/lib/stubs" -L"/usr/local/cuda/targets/x86_64-linux/lib" -lcudadevrt -lcudart_static -lrt -lpthread -ldl
+/usr/bin/g++  CMakeFiles/gpt.dir/gpt.c.o CMakeFiles/gpt.dir/burn.cu.o -o gpt  -lcublasLt -lmpi -lcurand -lcudadevrt -lcudart_static  -L"/usr/local/cuda/targets/x86_64-linux/lib/stubs" -L"/usr/local/cuda/targets/x86_64-linux/lib" -lrt -lpthread -ldl

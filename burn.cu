@@ -205,17 +205,16 @@ public:
             CURAND_CALL(curandGenerateUniform(prngGPU, (float *) B, Bs));
             CURAND_CALL(curandGenerateUniform(prngGPU, (float *) C, Cs));
 
-            // On A100, the average time for the GEMM kernel to complete is ~ 12ms
-	    // So set the iteration count based on 83 executions per second 
-	    int cnt = (83 * up_seconds);
-	    int iterations = cnt;
+            int iterations = 1;
 	    int usleep_time = (down_seconds * 1000000);
 	    time_t t;
 	    time(&t);
+            time_t target_up_second = t + (time_t) up_seconds;
+            //printf("DEBUG: t %ld target_up_second %ld\n", t , target_up_second);
 	    printf("%sEntering loop. Up: %d seconds. Down: %d seconds\n",(ctime(&t)),up_seconds,down_seconds);
             while (iterations) {
                 cublas_status = cublasLtMatmul(handle,
-                        matmulDesc,
+                    matmulDesc,
                     &alpha,
                     A,
                     Adesc,
@@ -235,14 +234,17 @@ public:
                         << cublas_status << endl;
                     exit(-1);
                 }
-		iterations--;
-		if (iterations == 0) {
-                    CHECK_ERROR(cudaDeviceSynchronize());
+                CHECK_ERROR(cudaDeviceSynchronize());
+                time(&t);
+		if (target_up_second <= t) {
+                    //printf("DEBUG: up phase done at  t %ld target_up_second %ld\n", t , target_up_second);
 		    usleep(usleep_time);
-		    iterations = cnt;
 		    int rtn = MPI_Barrier(MPI_COMM_WORLD);
+                    time(&t);
+                    target_up_second = t + up_seconds;
+                    //printf("DEBUG: down phase done at t %ld next target_up_second %ld\n", t , target_up_second);
+
 	        }
-		// int rtn = MPI_Barrier(MPI_COMM_WORLD);
             }
             CHECK_ERROR(cudaDeviceSynchronize());
 
