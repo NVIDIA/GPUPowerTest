@@ -7,7 +7,11 @@
 #include <curand.h>
 #include <unistd.h>
 #include <time.h>
+#include <sys/time.h>
 #include <mpi.h>
+
+#define M 1000000
+#define K 1000
 
 #define CHECK_ERROR(error) \
     if (error != cudaSuccess) { \
@@ -90,7 +94,6 @@ public:
 
     void operator()() noexcept(false) {
         try {
-
 
             cublas_status = cublasLtCreate(&handle);
             if (cublas_status != CUBLAS_STATUS_SUCCESS) {
@@ -205,13 +208,17 @@ public:
             CURAND_CALL(curandGenerateUniform(prngGPU, (float *) B, Bs));
             CURAND_CALL(curandGenerateUniform(prngGPU, (float *) C, Cs));
 
+            timeval tod;
+            gettimeofday(&tod, NULL);
             int iterations = 1;
-	    int usleep_time = (down_seconds * 1000000);
+	    int usleep_time = (down_seconds * M);
 	    time_t t;
 	    time(&t);
             time_t target_up_second = t + (time_t) up_seconds;
-            //printf("DEBUG: t %ld target_up_second %ld\n", t , target_up_second);
-	    printf("%sEntering loop. Up: %d seconds. Down: %d seconds\n",(ctime(&t)),up_seconds,down_seconds);
+            suseconds_t target_up_ms = tod.tv_usec / K;
+            printf("DEBUG: second %ld ms. %3ld target_up_second %ld ms. %ld\n", t,
+                    tod.tv_usec / K, target_up_second, target_up_ms);
+	    printf("%sEntering loop. Up: %d seconds. Down: %d seconds.\n", (ctime(&t)), up_seconds, down_seconds);
             while (iterations) {
                 cublas_status = cublasLtMatmul(handle,
                     matmulDesc,
@@ -236,14 +243,19 @@ public:
                 }
                 CHECK_ERROR(cudaDeviceSynchronize());
                 time(&t);
-		if (target_up_second <= t) {
-                    //printf("DEBUG: up phase done at  t %ld target_up_second %ld\n", t , target_up_second);
+                gettimeofday(&tod, NULL);
+		if (target_up_second <= t && target_up_ms <= (tod.tv_usec / K)) {
+                    printf("DEBUG: up phase done at sec %ld ms. %3ld target_up_second %ld target_up_ms %ld\n", 
+                            t, tod.tv_usec / K, target_up_second, target_up_ms);
 		    usleep(usleep_time);
 		    int rtn = MPI_Barrier(MPI_COMM_WORLD);
                     time(&t);
+                    gettimeofday(&tod, NULL);
                     target_up_second = t + up_seconds;
-                    //printf("DEBUG: down phase done at t %ld next target_up_second %ld\n", t , target_up_second);
-
+                    target_up_ms = tod.tv_usec / K;
+                    printf("DEBUG: down phase done at sec %ld ms. %ld next target_up_second %ld "
+                           "target_up_ms %3ld\n", t, tod.tv_usec / K, 
+                           target_up_second, target_up_ms);
 	        }
             }
             CHECK_ERROR(cudaDeviceSynchronize());
