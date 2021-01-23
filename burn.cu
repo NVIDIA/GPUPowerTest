@@ -75,6 +75,7 @@ private:
     // for the square wave
     int up_seconds;
     int down_seconds;
+    int gpuid = -1;
 
 public:
     BurnGPU(int gpu, int u_secs, int d_secs) {
@@ -85,6 +86,7 @@ public:
 
 	up_seconds = u_secs;
 	down_seconds = d_secs;
+        gpuid = gpu;
 
         CHECK_ERROR((cudaMalloc((void**)&A, As)));
         CHECK_ERROR((cudaMalloc((void**)&B, Bs)));
@@ -214,12 +216,16 @@ public:
 	    int usleep_time = (down_seconds * M);
 	    time_t t;
 	    time(&t);
-            time_t target_up_second = t + (time_t) up_seconds;
-            suseconds_t target_up_ms = tod.tv_usec / K;
-            printf("DEBUG: second %ld ms. %3ld target_up_second %ld ms. %ld\n", t,
+            /* Add one to the target up second and usleep to start on a secpnd boundary with
+            ** the target ms. set to 0; this elimnates the ms. slop comming out of the MPI barrier
+            */
+            time_t target_up_second = t + (time_t) up_seconds + 1;
+            suseconds_t target_up_ms = 0;
+            printf("GPU %2d arrival second %ld ms. %3ld target_up_second %ld ms. %ld\n", gpuid, t,
                     tod.tv_usec / K, target_up_second, target_up_ms);
-	    printf("%sEntering loop. Up: %d seconds. Down: %d seconds.\n", (ctime(&t)), up_seconds, down_seconds);
-            while (iterations) {
+	    usleep(M - tod.tv_usec);
+	    printf("GPU %2d %sEntering loop. Up: %d seconds. Down: %d seconds.\n", gpuid, (ctime(&t)), up_seconds, down_seconds);
+            while (iterations++) {
                 cublas_status = cublasLtMatmul(handle,
                     matmulDesc,
                     &alpha,
@@ -245,17 +251,18 @@ public:
                 time(&t);
                 gettimeofday(&tod, NULL);
 		if (target_up_second <= t && target_up_ms <= (tod.tv_usec / K)) {
-                    printf("DEBUG: up phase done at sec %ld ms. %3ld target_up_second %ld target_up_ms %ld\n", 
-                            t, tod.tv_usec / K, target_up_second, target_up_ms);
+                    printf("GPU %2d up phase done at second %ld ms. %3ld Iterations %-8d "
+                           "target_up_second %ld target_up_ms %ld\n",
+                            gpuid, t, tod.tv_usec / K, iterations, target_up_second, target_up_ms);
+                    iterations = 1;
 		    usleep(usleep_time);
 		    int rtn = MPI_Barrier(MPI_COMM_WORLD);
                     time(&t);
                     gettimeofday(&tod, NULL);
                     target_up_second = t + up_seconds;
                     target_up_ms = tod.tv_usec / K;
-                    printf("DEBUG: down phase done at sec %ld ms. %ld next target_up_second %ld "
-                           "target_up_ms %3ld\n", t, tod.tv_usec / K, 
-                           target_up_second, target_up_ms);
+                    printf("GPU %2d down phase done at second %ld ms. %3ld\n", 
+                            gpuid, t, tod.tv_usec / K );
 	        }
             }
             CHECK_ERROR(cudaDeviceSynchronize());
