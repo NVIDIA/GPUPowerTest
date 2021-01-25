@@ -42,9 +42,12 @@ private:
     cudaError_t cuda_error {};  
     cublasStatus_t cublas_status {};
     
-    float* A = nullptr;
-    float* B = nullptr;
-    float* C = nullptr;
+    float* A_up = nullptr;
+    float* B_up = nullptr;
+    float* C_up = nullptr;
+    float* A_dn = nullptr;
+    float* B_dn = nullptr;
+    float* C_dn = nullptr;
     cublasComputeType_t cuCompType = CUBLAS_COMPUTE_32F_FAST_16F;
     cudaDataType_t cuDataType = CUDA_R_32F;
 
@@ -53,24 +56,37 @@ private:
 
 // matrix dims must agree with const int ld (see below)
 // for the transpose and op states
-#define SEED 10000
+#define SEED_UP 10000
+#define SEED_DN 1
 
-    const int Mm = SEED;
-    const int Mn = SEED;
-    const int Mk = SEED;
-    const size_t As = SEED * SEED;
-    const size_t Bs = SEED * SEED;
-    const size_t Cs = SEED * SEED;
+    const int Mm_up = SEED_UP;
+    const int Mn_up = SEED_UP;
+    const int Mk_up = SEED_UP;
+    const int Mm_dn = SEED_DN;
+    const int Mn_dn = SEED_DN;
+    const int Mk_dn = SEED_DN;
+    const size_t As_up = SEED_UP * SEED_UP;
+    const size_t Bs_up = SEED_UP * SEED_UP;
+    const size_t Cs_up = SEED_UP * SEED_UP;
+    const size_t As_dn = SEED_DN * SEED_DN;
+    const size_t Bs_dn = SEED_DN * SEED_DN;
+    const size_t Cs_dn = SEED_DN * SEED_DN;
 
-    cublasLtMatmulDesc_t matmulDesc = NULL;
-    cublasLtMatrixLayout_t Adesc = NULL;
-    cublasLtMatrixLayout_t Bdesc = NULL;
-    cublasLtMatrixLayout_t Cdesc = NULL;
-    cublasLtHandle_t handle {};
+    cublasLtMatmulDesc_t matmulDesc_up = NULL;
+    cublasLtMatrixLayout_t Adesc_up = NULL;
+    cublasLtMatrixLayout_t Bdesc_up = NULL;
+    cublasLtMatrixLayout_t Cdesc_up = NULL;
+    cublasLtMatmulDesc_t matmulDesc_dn = NULL;
+    cublasLtMatrixLayout_t Adesc_dn = NULL;
+    cublasLtMatrixLayout_t Bdesc_dn = NULL;
+    cublasLtMatrixLayout_t Cdesc_dn = NULL;
+    cublasLtHandle_t handle_up {};
+    cublasLtHandle_t handle_dn {};
     void* workspace;
     const size_t workspaceSize = 8192 * 8192 * 4;
     const cublasOperation_t op = CUBLAS_OP_N;
-    const int ld = SEED;
+    const int ld_up = SEED_UP;
+    const int ld_dn = SEED_DN;
     cublasLtOrder_t order = CUBLASLT_ORDER_COL;
     // for the square wave
     int up_seconds;
@@ -88,23 +104,33 @@ public:
 	down_seconds = d_secs;
         gpuid = gpu;
 
-        CHECK_ERROR((cudaMalloc((void**)&A, As)));
-        CHECK_ERROR((cudaMalloc((void**)&B, Bs)));
-        CHECK_ERROR((cudaMalloc((void**)&C, Cs)));
+        CHECK_ERROR((cudaMalloc((void**)&A_up, As_up)));
+        CHECK_ERROR((cudaMalloc((void**)&B_up, Bs_up)));
+        CHECK_ERROR((cudaMalloc((void**)&C_up, Cs_up)));
+        CHECK_ERROR((cudaMalloc((void**)&A_dn, As_dn)));
+        CHECK_ERROR((cudaMalloc((void**)&B_dn, Bs_dn)));
+        CHECK_ERROR((cudaMalloc((void**)&C_dn, Cs_dn)));
         CHECK_ERROR((cudaMalloc((void**)&workspace, workspaceSize)));
     }
 
     void operator()() noexcept(false) {
         try {
 
-            cublas_status = cublasLtCreate(&handle);
+            cublas_status = cublasLtCreate(&handle_up);
             if (cublas_status != CUBLAS_STATUS_SUCCESS) {
                 cout << "cublasLtCreate failed "
                         << cublas_status << endl;
                 exit(-1);
             }
 
-            cublas_status = cublasLtMatmulDescCreate(&matmulDesc,
+            cublas_status = cublasLtCreate(&handle_dn);
+            if (cublas_status != CUBLAS_STATUS_SUCCESS) {
+                cout << "cublasLtCreate failed "
+                        << cublas_status << endl;
+                exit(-1);
+            }
+
+            cublas_status = cublasLtMatmulDescCreate(&matmulDesc_up,
                 cuCompType,
                 cuDataType);
             if (cublas_status != CUBLAS_STATUS_SUCCESS) {
@@ -113,7 +139,16 @@ public:
                 exit(-1);
             }
 
-            cublas_status = cublasLtMatmulDescSetAttribute(matmulDesc,
+            cublas_status = cublasLtMatmulDescCreate(&matmulDesc_dn,
+                cuCompType,
+                cuDataType);
+            if (cublas_status != CUBLAS_STATUS_SUCCESS) {
+                cout << "cublasLtMatmulDescCreate failed" 
+                        << cublas_status << endl;
+                exit(-1);
+            }
+
+            cublas_status = cublasLtMatmulDescSetAttribute(matmulDesc_up,
                 CUBLASLT_MATMUL_DESC_TRANSA, &op, sizeof(op));
             if (cublas_status != CUBLAS_STATUS_SUCCESS) {
                 cout << "cublasLtMatmulDescSetAttribute A failed " 
@@ -121,7 +156,15 @@ public:
                 exit(-1);
             }
 
-            cublas_status = cublasLtMatmulDescSetAttribute(matmulDesc,
+            cublas_status = cublasLtMatmulDescSetAttribute(matmulDesc_dn,
+                CUBLASLT_MATMUL_DESC_TRANSA, &op, sizeof(op));
+            if (cublas_status != CUBLAS_STATUS_SUCCESS) {
+                cout << "cublasLtMatmulDescSetAttribute A failed " 
+                        << cublas_status << endl;
+                exit(-1);
+            }
+
+            cublas_status = cublasLtMatmulDescSetAttribute(matmulDesc_up,
                 CUBLASLT_MATMUL_DESC_TRANSB, &op, sizeof(op));
             if (cublas_status != CUBLAS_STATUS_SUCCESS) {
                 cout << "cublasLtMatmulDescSetAttribute B failed " 
@@ -129,7 +172,15 @@ public:
                 exit(-1);
             }
 
-            cublas_status = cublasLtMatmulDescSetAttribute(matmulDesc,
+            cublas_status = cublasLtMatmulDescSetAttribute(matmulDesc_dn,
+                CUBLASLT_MATMUL_DESC_TRANSB, &op, sizeof(op));
+            if (cublas_status != CUBLAS_STATUS_SUCCESS) {
+                cout << "cublasLtMatmulDescSetAttribute B failed " 
+                        << cublas_status << endl;
+                exit(-1);
+            }
+
+            cublas_status = cublasLtMatmulDescSetAttribute(matmulDesc_up,
                 CUBLASLT_MATMUL_DESC_TRANSC, &op, sizeof(op));
             if (cublas_status != CUBLAS_STATUS_SUCCESS) {
                 cout << "cublasLtMatmulDescSetAttribute C failed "
@@ -137,18 +188,48 @@ public:
                 exit(-1);
             }
 
-            cublas_status = cublasLtMatrixLayoutCreate(&Adesc,
+            cublas_status = cublasLtMatmulDescSetAttribute(matmulDesc_dn,
+                CUBLASLT_MATMUL_DESC_TRANSC, &op, sizeof(op));
+            if (cublas_status != CUBLAS_STATUS_SUCCESS) {
+                cout << "cublasLtMatmulDescSetAttribute C failed "
+                        << cublas_status << endl;
+                exit(-1);
+            }
+
+            cublas_status = cublasLtMatrixLayoutCreate(&Adesc_up,
                     cuDataType,
-                    Mm,
-                    Mn,
-                    ld);
-            
+                    Mm_up,
+                    Mn_up,
+                    ld_up);
             if (cublas_status != CUBLAS_STATUS_SUCCESS) {
                 cout << "cublasLtMatrixLayoutCreate A failed " 
                         << cublas_status << endl;
                 exit(-1);
             }
-            cublas_status = cublasLtMatrixLayoutSetAttribute(Adesc,
+
+            cublas_status = cublasLtMatrixLayoutCreate(&Adesc_dn,
+                    cuDataType,
+                    Mm_dn,
+                    Mn_dn,
+                    ld_dn);
+            if (cublas_status != CUBLAS_STATUS_SUCCESS) {
+                cout << "cublasLtMatrixLayoutCreate A failed " 
+                        << cublas_status << endl;
+                exit(-1);
+            }
+
+            cublas_status = cublasLtMatrixLayoutCreate(&Adesc_dn,
+                    cuDataType,
+                    Mm_dn,
+                    Mn_dn,
+                    ld_dn);
+            if (cublas_status != CUBLAS_STATUS_SUCCESS) {
+                cout << "cublasLtMatrixLayoutCreate A failed " 
+                        << cublas_status << endl;
+                exit(-1);
+            }
+
+            cublas_status = cublasLtMatrixLayoutSetAttribute(Adesc_up,
                     CUBLASLT_MATRIX_LAYOUT_ORDER,
                     &order,
                     sizeof(cublasLtOrder_t)
@@ -159,18 +240,40 @@ public:
                 exit(-1);
             }
 
-            cublas_status = cublasLtMatrixLayoutCreate(&Bdesc,
+            cublas_status = cublasLtMatrixLayoutSetAttribute(Adesc_dn,
+                    CUBLASLT_MATRIX_LAYOUT_ORDER,
+                    &order,
+                    sizeof(cublasLtOrder_t)
+                    );
+            if (cublas_status != CUBLAS_STATUS_SUCCESS) {
+                cout << "cublasLtMatrixLayoutSetAttribute A failed "
+                    << cublas_status << endl;
+                exit(-1);
+            }
+
+            cublas_status = cublasLtMatrixLayoutCreate(&Bdesc_up,
                     cuDataType,
-                    Mn,
-                    Mk,
-                    ld);
+                    Mn_up,
+                    Mk_up,
+                    ld_up);
             if (cublas_status != CUBLAS_STATUS_SUCCESS) {
                 cout << "cublasLtMatrixLayoutCreate B failed " 
                         << cublas_status << endl;
                 exit(-1);
             }
 
-            cublas_status = cublasLtMatrixLayoutSetAttribute(Bdesc,
+            cublas_status = cublasLtMatrixLayoutCreate(&Bdesc_dn,
+                    cuDataType,
+                    Mn_dn,
+                    Mk_dn,
+                    ld_dn);
+            if (cublas_status != CUBLAS_STATUS_SUCCESS) {
+                cout << "cublasLtMatrixLayoutCreate B failed " 
+                        << cublas_status << endl;
+                exit(-1);
+            }
+
+            cublas_status = cublasLtMatrixLayoutSetAttribute(Bdesc_up,
                 CUBLASLT_MATRIX_LAYOUT_ORDER,
                 &order,
                 sizeof(cublasLtOrder_t)
@@ -181,18 +284,51 @@ public:
                 exit(-1);
             }
 
-            cublas_status = cublasLtMatrixLayoutCreate(&Cdesc,
-                                    cuDataType,
-                    Mk,
-                    Mm,
-                    ld);
+            cublas_status = cublasLtMatrixLayoutSetAttribute(Bdesc_dn,
+                CUBLASLT_MATRIX_LAYOUT_ORDER,
+                &order,
+                sizeof(cublasLtOrder_t)
+                );
+            if (cublas_status != CUBLAS_STATUS_SUCCESS) {
+                cout << "cublasLtMatrixLayoutSetAttribute B failed "
+                    << cublas_status << endl;
+                exit(-1);
+            }
+
+            cublas_status = cublasLtMatrixLayoutCreate(&Cdesc_up,
+                    cuDataType,
+                    Mk_up,
+                    Mm_up,
+                    ld_up);
             if (cublas_status != CUBLAS_STATUS_SUCCESS) {
                 cout << "cublasLtMatrixLayoutCreate C failed " 
                         << cublas_status << endl;
                 exit(-1);
             }
 
-            cublas_status = cublasLtMatrixLayoutSetAttribute(Cdesc,
+            cublas_status = cublasLtMatrixLayoutCreate(&Cdesc_dn,
+                    cuDataType,
+                    Mk_dn,
+                    Mm_dn,
+                    ld_dn);
+            if (cublas_status != CUBLAS_STATUS_SUCCESS) {
+                cout << "cublasLtMatrixLayoutCreate C failed " 
+                        << cublas_status << endl;
+                exit(-1);
+            }
+
+            cublas_status = cublasLtMatrixLayoutSetAttribute(Cdesc_up,
+                CUBLASLT_MATRIX_LAYOUT_ORDER,
+                &order,
+                sizeof(cublasLtOrder_t)
+                );
+            if (cublas_status != CUBLAS_STATUS_SUCCESS) {
+                cout << "cublasLtMatrixLayoutSetAttribute C failed "
+                    << cublas_status << endl;
+                exit(-1);
+            }
+
+            cublas_status = cublasLtMatrixLayoutSetAttribute(Cdesc_dn,
                 CUBLASLT_MATRIX_LAYOUT_ORDER,
                 &order,
                 sizeof(cublasLtOrder_t)
@@ -206,9 +342,12 @@ public:
             curandGenerator_t prngGPU;
             CURAND_CALL(curandCreateGenerator(&prngGPU, CURAND_RNG_PSEUDO_MRG32K3A));
             CURAND_CALL(curandSetPseudoRandomGeneratorSeed(prngGPU, 777));
-            CURAND_CALL(curandGenerateUniform(prngGPU, (float *) A, As));
-            CURAND_CALL(curandGenerateUniform(prngGPU, (float *) B, Bs));
-            CURAND_CALL(curandGenerateUniform(prngGPU, (float *) C, Cs));
+            CURAND_CALL(curandGenerateUniform(prngGPU, (float *) A_up, As_up));
+            CURAND_CALL(curandGenerateUniform(prngGPU, (float *) B_up, Bs_up));
+            CURAND_CALL(curandGenerateUniform(prngGPU, (float *) C_up, Cs_up));
+            CURAND_CALL(curandGenerateUniform(prngGPU, (float *) A_dn, As_dn));
+            CURAND_CALL(curandGenerateUniform(prngGPU, (float *) B_dn, Bs_dn));
+            CURAND_CALL(curandGenerateUniform(prngGPU, (float *) C_dn, Cs_dn));
 
             timeval tod;
             gettimeofday(&tod, NULL);
@@ -226,18 +365,18 @@ public:
 	    usleep(M - tod.tv_usec);
 	    printf("GPU %2d %sEntering loop. Up: %d seconds. Down: %d seconds.\n", gpuid, (ctime(&t)), up_seconds, down_seconds);
             while (iterations++) {
-                cublas_status = cublasLtMatmul(handle,
-                    matmulDesc,
+                cublas_status = cublasLtMatmul(handle_up,
+                    matmulDesc_up,
                     &alpha,
-                    A,
-                    Adesc,
-                    B,
-                    Bdesc,
+                    A_up,
+                    Adesc_up,
+                    B_up,
+                    Bdesc_up,
                     &beta,
-                    C,
-                    Cdesc,
-                    C,
-                    Cdesc,
+                    C_up,
+                    Cdesc_up,
+                    C_up,
+                    Cdesc_up,
                     NULL,
                     workspace,
                     workspaceSize,
@@ -267,7 +406,7 @@ public:
             }
             CHECK_ERROR(cudaDeviceSynchronize());
 
-            cublas_status = cublasLtDestroy(handle);
+            cublas_status = cublasLtDestroy(handle_up);
             if (cublas_status != CUBLAS_STATUS_SUCCESS) {
                 cout << "cublasLtDestroy failed "
                         << cublas_status << endl;
@@ -280,28 +419,56 @@ public:
     }
 
     ~BurnGPU() noexcept(false) {
-        cublas_status = cublasLtMatrixLayoutDestroy(Adesc);
+        cublas_status = cublasLtMatrixLayoutDestroy(Adesc_up);
         if (cublas_status != CUBLAS_STATUS_SUCCESS) {
             cout << "cublasLtMatrixLayoutDestroy A failed "
                 << cublas_status << endl;
             exit(-1);
         }
 
-        cublas_status = cublasLtMatrixLayoutDestroy(Bdesc);
+        cublas_status = cublasLtMatrixLayoutDestroy(Adesc_dn);
+        if (cublas_status != CUBLAS_STATUS_SUCCESS) {
+            cout << "cublasLtMatrixLayoutDestroy A failed "
+                << cublas_status << endl;
+            exit(-1);
+        }
+
+        cublas_status = cublasLtMatrixLayoutDestroy(Bdesc_up);
         if (cublas_status != CUBLAS_STATUS_SUCCESS) {
             cout << "cublasLtMatrixLayoutDestroy B failed "
                 << cublas_status << endl;
             exit(-1);
         }
 
-        cublas_status = cublasLtMatrixLayoutDestroy(Cdesc);
+        cublas_status = cublasLtMatrixLayoutDestroy(Bdesc_dn);
+        if (cublas_status != CUBLAS_STATUS_SUCCESS) {
+            cout << "cublasLtMatrixLayoutDestroy B failed "
+                << cublas_status << endl;
+            exit(-1);
+        }
+
+        cublas_status = cublasLtMatrixLayoutDestroy(Cdesc_up);
         if (cublas_status != CUBLAS_STATUS_SUCCESS) {
             cout << "cublasLtMatrixLayoutDestroy C failed "
                 << cublas_status << endl;
             exit(-1);
         }
 
-        cublas_status = cublasLtMatmulDescDestroy(matmulDesc);
+        cublas_status = cublasLtMatrixLayoutDestroy(Cdesc_dn);
+        if (cublas_status != CUBLAS_STATUS_SUCCESS) {
+            cout << "cublasLtMatrixLayoutDestroy C failed "
+                << cublas_status << endl;
+            exit(-1);
+        }
+
+        cublas_status = cublasLtMatmulDescDestroy(matmulDesc_up);
+        if (cublas_status != CUBLAS_STATUS_SUCCESS) {
+            cout << "cublasLtMatmulDescDestroy failed cublas_status "
+                << cublas_status << endl;
+            exit(-1);
+        }
+
+        cublas_status = cublasLtMatmulDescDestroy(matmulDesc_dn);
         if (cublas_status != CUBLAS_STATUS_SUCCESS) {
             cout << "cublasLtMatmulDescDestroy failed cublas_status "
                 << cublas_status << endl;
@@ -309,9 +476,12 @@ public:
         }
 
         CHECK_ERROR(cudaFree(workspace));
-        CHECK_ERROR(cudaFree(A));
-        CHECK_ERROR(cudaFree(B));
-        CHECK_ERROR(cudaFree(C));
+        CHECK_ERROR(cudaFree(A_up));
+        CHECK_ERROR(cudaFree(B_up));
+        CHECK_ERROR(cudaFree(C_up));
+        CHECK_ERROR(cudaFree(A_dn));
+        CHECK_ERROR(cudaFree(B_dn));
+        CHECK_ERROR(cudaFree(C_dn));
     }
 
 };
