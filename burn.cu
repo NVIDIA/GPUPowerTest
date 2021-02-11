@@ -386,11 +386,11 @@ public:
                 CHECK_ERROR(cudaDeviceSynchronize());
                 gettimeofday(&tod, NULL);
 		if (target_up_ms <= tod.tv_sec * K + tod.tv_usec / K) {
-                    iterations = 1;
                     suseconds_t target_dn_ms =(suseconds_t) ((double) tod.tv_sec * 
                             (double) K + (double) tod.tv_usec / (double) K + dn_seconds * (double) K);
                     printf("GPU %2d up phase done at ms. %ld target_dn_ms %ld Iterations %-8d\n",
                             gpuid, tod.tv_sec * K + tod.tv_usec / K, target_dn_ms, iterations);
+                    iterations = 1;
                     while(iterations) {
                         cublas_status = cublasLtMatmul(handle_dn,
                             matmulDesc_dn,
