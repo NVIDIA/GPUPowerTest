@@ -29,7 +29,7 @@ using std::endl;
 
 #ifdef __cplusplus
 extern "C" {
-    void burn(int gpu, int u_secs, int d_secs);
+    void burn(int gpu, double u_secs, double d_secs);
 }
 #endif
 
@@ -89,12 +89,12 @@ private:
     const int ld_dn = SEED_DN;
     cublasLtOrder_t order = CUBLASLT_ORDER_COL;
     // for the square wave
-    int up_seconds;
-    int dn_seconds;
+    double up_seconds;
+    double dn_seconds;
     int gpuid = -1;
 
 public:
-    BurnGPU(int gpu, int u_secs, int d_secs) {
+    BurnGPU(int gpu, double u_secs, double d_secs) {
         cudaDeviceProp devprop {};
         CHECK_ERROR(cudaSetDevice(gpu));
         CHECK_ERROR(cudaGetDeviceProperties(&devprop, gpu));
@@ -352,17 +352,15 @@ public:
             timeval tod;
             gettimeofday(&tod, NULL);
             int iterations = 1;
-	    time_t t;
-	    time(&t);
             /* Add one to the target up second and usleep to start on a secpnd boundary with
             ** the target ms. set to 0; this elimnates the ms. slop comming out of the MPI barrier
             */
-            time_t target_up_second = t + (time_t) up_seconds + 1;
-            suseconds_t target_ms = 0;
-            printf("GPU %2d arrival second %ld ms. %3ld target_up_second %ld ms. %ld\n", gpuid, t,
-                    tod.tv_usec / K, target_up_second, target_ms);
+            suseconds_t target_up_ms = (suseconds_t) (((double) tod.tv_sec + up_seconds + 1.0) * K);
+            printf("GPU %2d arrival second %ld ms. %ld target_up_ms %ld\n", gpuid, tod.tv_sec,
+                    tod.tv_usec / K, target_up_ms);
 	    usleep(M - tod.tv_usec);
-	    printf("GPU %2d %sEntering loop. Up: %d seconds. Down: %d seconds.\n", gpuid, (ctime(&t)), up_seconds, dn_seconds);
+	    printf("GPU %2d %sEntering loop. Up: %3.3f seconds. Down: %3.3f seconds.\n", 
+                    gpuid, (ctime(&tod.tv_sec)), up_seconds, dn_seconds);
             while (iterations++) {
                 cublas_status = cublasLtMatmul(handle_up,
                     matmulDesc_up,
@@ -386,14 +384,13 @@ public:
                     exit(-1);
                 }
                 CHECK_ERROR(cudaDeviceSynchronize());
-                time(&t);
                 gettimeofday(&tod, NULL);
-		if (target_up_second <= t) {
-                    printf("GPU %2d up phase done at second %ld ms. %3ld Iterations %-8d "
-                           "target_up_second %ld target_up_ms %ld\n",
-                            gpuid, t, tod.tv_usec / K, iterations, target_up_second, target_ms);
+		if (target_up_ms <= tod.tv_sec * K + tod.tv_usec / K) {
                     iterations = 1;
-                    int target_dn_second = t + dn_seconds;
+                    suseconds_t target_dn_ms =(suseconds_t) ((double) tod.tv_sec * 
+                            (double) K + (double) tod.tv_usec / (double) K + dn_seconds * (double) K);
+                    printf("GPU %2d up phase done at ms. %ld target_dn_ms %ld Iterations %-8d\n",
+                            gpuid, tod.tv_sec * K + tod.tv_usec / K, target_dn_ms, iterations);
                     while(iterations) {
                         cublas_status = cublasLtMatmul(handle_dn,
                             matmulDesc_dn,
@@ -417,16 +414,15 @@ public:
                             exit(-1);
                         }
                         CHECK_ERROR(cudaDeviceSynchronize());
-                        time(&t);
                         gettimeofday(&tod, NULL);
-        		if (target_dn_second <= t)  break;
+        		if (target_dn_ms <= tod.tv_sec * K + tod.tv_usec / K)  break;
                     }
 		    int rtn = MPI_Barrier(MPI_COMM_WORLD);
-                    time(&t);
                     gettimeofday(&tod, NULL);
-                    target_up_second = t + up_seconds;
-                    printf("GPU %2d down phase done at second %ld ms. %3ld\n", 
-                            gpuid, t, tod.tv_usec / K );
+                    target_up_ms = (suseconds_t) ((double) tod.tv_sec *
+                            (double) K + (double) tod.tv_usec / (double) K + up_seconds * (double) K);
+                    printf("GPU %2d dn phase done at ms. %ld target_up_ms %ld\n", 
+                            gpuid, tod.tv_sec * K + tod.tv_usec / K, target_up_ms);
 	        }
             }
             CHECK_ERROR(cudaDeviceSynchronize());
@@ -511,8 +507,7 @@ public:
 
 };
 
-void burn(int gpu, int u_secs, int d_secs) {
-    // printf("BURN, gpu: %d, up seconds: %d, dn_seconds: %d\n",gpu,u_secs,d_secs);
+void burn(int gpu, double u_secs, double d_secs) {
     BurnGPU *burngpu = new BurnGPU(gpu, u_secs, d_secs);
     (*burngpu)();
 }

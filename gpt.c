@@ -15,11 +15,11 @@
 
 struct gpt_args {
     int gpu;
-    int up_secs;
-    int down_secs;
+    double up_secs;
+    double down_secs;
 };
 
-void burn(int gpu, int upsecs, int downsecs);
+void burn(int gpu, double upsecs, double downsecs);
 
 void sig_usr1()
 {
@@ -58,7 +58,8 @@ int main(int argc, char *argv[])
     struct sigevent   ev;
 
 
-    int up = 0, down = 0, load_time = 60;
+    double up = 0.0, down = 0.0;
+    int  load_time = 60.0;
     int gpus[MAX_GPUS] = { 0, 1, 2, 3, 4, 5, 6, 7 };
     int gpu_cnt = 0;
     int opt, n, g, i, ret;
@@ -82,16 +83,16 @@ int main(int argc, char *argv[])
         while ((opt = getopt(argc, argv, ":u:d:t:i:")) != -1) {
             switch(opt) {
 		case 'u':
-		    up = atoi(optarg);
-		    if (up <= 0) {
-	 	        printf("Invalid up duration value: %d\n",up);
+		    up = atof(optarg);
+		    if (up <= 0.0) {
+	 	        printf("Invalid up duration value: %f\n",up);
 		        exit(0);
 		    }
 		    break;
 		case 'd':
-		    down = atoi(optarg);
+		    down = atof(optarg);
 		    if (down <= 0) {
-	 	        printf("Invalid down duration value: %d\n",down);
+	 	        printf("Invalid down duration value: %f\n",down);
 		        exit(0);
 		    }
 		    break; 
