@@ -1,8 +1,9 @@
 file(REMOVE_RECURSE
-  "CMakeFiles/gpt.dir/burn.cu.o"
   "CMakeFiles/gpt.dir/gpt.c.o"
-  "gpt"
+  "CMakeFiles/gpt.dir/burn.cu.o"
+  "CMakeFiles/gpt.dir/cmake_device_link.o"
   "gpt.pdb"
+  "gpt"
 )
 
 # Per-language clean rules from dependency scanning.
