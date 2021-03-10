@@ -43,7 +43,6 @@ void *launch_kernel(struct gpt_args *gargs)
     burn(gargs->gpu, gargs->up_secs, gargs->down_secs);
 }
 
-
 int main(int argc, char *argv[])
 {
     int provided = -1;

@@ -9,9 +9,12 @@
 #include <time.h>
 #include <sys/time.h>
 #include <mpi.h>
+#include <pthread.h>
 
 #define M 1000000
 #define K 1000
+
+#define CORE_PER_GPU 10
 
 #define CHECK_ERROR(error) \
     if (error != cudaSuccess) { \
@@ -32,6 +35,28 @@ extern "C" {
     void burn(int gpu, double u_secs, double d_secs);
 }
 #endif
+
+void *core_spin(void *target_ms) {
+    timeval tod; 
+    suseconds_t target_up_ms = *static_cast<suseconds_t *>(target_ms);
+    gettimeofday(&tod, NULL);
+    while(true) {
+        if (target_up_ms <= tod.tv_sec * K + tod.tv_usec / K)  break;
+        gettimeofday(&tod, NULL);
+    }
+    return(NULL);
+}
+
+#define CORE_SPIN() { \
+    for (int i=0; i < CORE_PER_GPU; i++) {\
+                ret = pthread_create(&tids[i], &attr, \
+                        core_spin, (suseconds_t *) &target_up_ms);\
+                if (ret != 0) {\
+                    perror("burn pthread_create");\
+                    exit(0);\
+                }\
+            }\
+    }
 
 class BurnGPU {
 private:
@@ -352,7 +377,7 @@ public:
             timeval tod;
             gettimeofday(&tod, NULL);
             int iterations = 1;
-            /* Add one to the target up second and usleep to start on a secpnd boundary with
+            /* Add one to the target up second and usleep to start on a second boundary with
             ** the target ms. set to 0; this elimnates the ms. slop comming out of the MPI barrier
             */
             suseconds_t target_up_ms = (suseconds_t) (((double) tod.tv_sec + up_seconds + 1.0) * K);
@@ -361,6 +386,11 @@ public:
 	    usleep(M - tod.tv_usec);
 	    printf("GPU %2d %sEntering loop. Up: %3.3f seconds. Down: %3.3f seconds.\n", 
                     gpuid, (ctime(&tod.tv_sec)), up_seconds, dn_seconds);
+            pthread_t tids[CORE_PER_GPU];
+            pthread_attr_t attr;
+            pthread_attr_init(&attr);
+            int ret = 0;
+            CORE_SPIN(); 
             while (iterations++) {
                 cublas_status = cublasLtMatmul(handle_up,
                     matmulDesc_up,
@@ -391,6 +421,9 @@ public:
                     printf("GPU %2d up phase done at ms. %ld target_dn_ms %ld Iterations %-8d\n",
                             gpuid, tod.tv_sec * K + tod.tv_usec / K, target_dn_ms, iterations);
                     iterations = 1;
+                    for (int i=0; i < CORE_PER_GPU; i++) {
+                        pthread_join(tids[i], (void **)NULL);
+                    }
                     while(iterations) {
                         cublas_status = cublasLtMatmul(handle_dn,
                             matmulDesc_dn,
@@ -423,6 +456,8 @@ public:
                             (double) K + (double) tod.tv_usec / (double) K + up_seconds * (double) K);
                     printf("GPU %2d dn phase done at ms. %ld target_up_ms %ld\n", 
                             gpuid, tod.tv_sec * K + tod.tv_usec / K, target_up_ms);
+                    CORE_SPIN(); 
+
 	        }
             }
             CHECK_ERROR(cudaDeviceSynchronize());
