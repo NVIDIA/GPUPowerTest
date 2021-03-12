@@ -1,16 +1,19 @@
-# Synopsis:
-# gpt generates load on GPUs for power testing. The "-u" and "-d" flags are the
-# power up/down duration to facilitate generating load in the form of a square wave.
-#
-# mpirun
-# -np N    ;total number of GPU to engage
-# -H  h:n  ;comma separated host:count where sum(count) = N
-# ./gpt -u <power load/up seconds> -d <no power load/down seconds> -t <total seconds-to-run>
-# example:
-# mpirun --allow-run-as-root -np 2 -H localhost:2 ./gpt -u 4 -d 6 -t 60
-#
-# The above will cycle GPU power up for 4 seconds, no load for 6 seconds continuously
-# until the total 60 second run time is reached.
+$ ./gpt -h
+usage: ./gpt ... (GPU 0) or
+ mpirun --allow-run-as-root -np 8 -H localhost:8  ./gpt ... (GPU per MPI RANK)
+-u: up time (float)
+-d: down time (float)
+-t: time (duration in seconds (int)
+-p: number of FP32 streams (int) max 45
+-f: number of TF32 streams (int) max 50
+-s: inject spin_kernels in the FP32 stream, (int) default 0
 
+$ mpirun --allow-run-as-root -np 8 -H localhost:8  ./gpt -t 300  -u 10 -d 1 
+
+$ mpirun --allow-run-as-root -np 8 -H localhost:8  ./gpt -t 300  -u 10 -d 1 -p 16 -f 0 -s 0^
+
+
+# For a machine with CMT disabled use these mpi options to sping multi core
+mpirun -np 8 -x LD_LIBRARY_PATH --map-by ppr:2:numa:pe=11:overload-allowed ./gpt -u 5 -d .5 -t 600
 
 
