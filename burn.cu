@@ -14,8 +14,6 @@
 #define M 1000000
 #define K 1000
 
-#define CORE_PER_GPU 10
-
 #define CHECK_ERROR(error) \
     if (error != cudaSuccess) { \
         cout << "ERROR:" << cudaGetErrorString(error) << endl; \
@@ -32,7 +30,7 @@ using std::endl;
 
 #ifdef __cplusplus
 extern "C" {
-    void burn(int gpu, double u_secs, double d_secs);
+    void burn(int gpu, int cores, double u_secs, double d_secs);
 }
 #endif
 
@@ -48,13 +46,13 @@ void *core_spin(void *target_ms) {
 }
 
 #define CORE_SPIN() { \
-    for (int i=0; i < CORE_PER_GPU; i++) {\
-                ret = pthread_create(&tids[i], &attr, \
+    for (int thrix=0; thrix < cores; thrix++) {\
+                ret = pthread_create(&tids[thrix], NULL, \
                         core_spin, (suseconds_t *) &target_up_ms);\
                 if (ret != 0) {\
                     perror("burn pthread_create");\
                     exit(0);\
-                }\
+                } \
             }\
     }
 
@@ -78,6 +76,8 @@ private:
 
     float alpha = 1.0;
     float beta = 0.0;
+
+    int cores = 0;
 
 // matrix dims must agree with const int ld (see below)
 // for the transpose and op states
@@ -117,13 +117,23 @@ private:
     double up_seconds;
     double dn_seconds;
     int gpuid = -1;
+    pthread_t* tids = 0;
 
 public:
-    BurnGPU(int gpu, double u_secs, double d_secs) {
+    BurnGPU(int gpu, int cores, double u_secs, double d_secs) : cores(cores) {
         cudaDeviceProp devprop {};
         CHECK_ERROR(cudaSetDevice(gpu));
         CHECK_ERROR(cudaGetDeviceProperties(&devprop, gpu));
         cout << "Found GPU " << gpu << " " << devprop.name << endl;
+        cout << "Spinning " << cores << " CPU cores per GPU " << endl;
+
+        if (cores) {
+            tids = (pthread_t *) malloc(sizeof(pthread_t) * cores);
+            if (! tids) {
+                cout << "Failed to allocate memory for " << cores << " pthread_t " << endl;
+                exit(-1);
+            }
+        }
 
 	up_seconds = u_secs;
 	dn_seconds = d_secs;
@@ -386,11 +396,8 @@ public:
 	    usleep(M - tod.tv_usec);
 	    printf("GPU %2d %sEntering loop. Up: %3.3f seconds. Down: %3.3f seconds.\n", 
                     gpuid, (ctime(&tod.tv_sec)), up_seconds, dn_seconds);
-            pthread_t tids[CORE_PER_GPU];
-            pthread_attr_t attr;
-            pthread_attr_init(&attr);
             int ret = 0;
-            CORE_SPIN(); 
+            CORE_SPIN();
             while (iterations++) {
                 cublas_status = cublasLtMatmul(handle_up,
                     matmulDesc_up,
@@ -421,7 +428,7 @@ public:
                     printf("GPU %2d up phase done at ms. %ld target_dn_ms %ld Iterations %-8d\n",
                             gpuid, tod.tv_sec * K + tod.tv_usec / K, target_dn_ms, iterations);
                     iterations = 1;
-                    for (int i=0; i < CORE_PER_GPU; i++) {
+                    for (int i=0; i < cores; i++) {
                         pthread_join(tids[i], (void **)NULL);
                     }
                     while(iterations) {
@@ -475,6 +482,8 @@ public:
     }
 
     ~BurnGPU() noexcept(false) {
+        free(tids);
+
         cublas_status = cublasLtMatrixLayoutDestroy(Adesc_up);
         if (cublas_status != CUBLAS_STATUS_SUCCESS) {
             cout << "cublasLtMatrixLayoutDestroy A failed "
@@ -542,8 +551,8 @@ public:
 
 };
 
-void burn(int gpu, double u_secs, double d_secs) {
-    BurnGPU *burngpu = new BurnGPU(gpu, u_secs, d_secs);
+void burn(int gpu, int cores, double u_secs, double d_secs) {
+    BurnGPU *burngpu = new BurnGPU(gpu, cores, u_secs, d_secs);
     (*burngpu)();
 }
 

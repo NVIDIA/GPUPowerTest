@@ -15,11 +15,12 @@
 
 struct gpt_args {
     int gpu;
+    int cores;
     double up_secs;
     double down_secs;
 };
 
-void burn(int gpu, double upsecs, double downsecs);
+void burn(int gpu, int cores, double upsecs, double downsecs);
 
 void sig_usr1()
 {
@@ -40,7 +41,7 @@ void *launch_kernel(struct gpt_args *gargs)
     printf("Launching GPU Kernel, Thread ID %ld GPU %d mpi_rank %d\n", 
             ptid, gargs->gpu, mpi_rank);
     */
-    burn(gargs->gpu, gargs->up_secs, gargs->down_secs);
+    burn(gargs->gpu, gargs->cores, gargs->up_secs, gargs->down_secs);
 }
 
 int main(int argc, char *argv[])
@@ -57,10 +58,11 @@ int main(int argc, char *argv[])
     struct sigevent   ev;
 
 
-    double up = 0.0, down = 0.0;
-    int  load_time = 60.0;
+    double up = 1.0, down = 1.0;
+    int load_time = 60;
     int gpus[MAX_GPUS] = { 0, 1, 2, 3, 4, 5, 6, 7 };
     int gpu_cnt = 0;
+    int cores = 0;
     int opt, n, g, i, ret;
     struct gpt_args gargs;
 
@@ -78,8 +80,12 @@ int main(int argc, char *argv[])
     pthread_t tids[MAX_GPUS];
     pthread_attr_t attr;
 
+    if (argc == 2 && argv[1][1] == 'h') {
+         printf("Usage: %s -u <power load up duration seconds> \n\t-d <power load down duration seconds> \n\t-t <load test duration seconds> \n\t[ -c N spin N CPU cores per GPU] \n\t[ -i comma-seprated GPU list]\n",argv[0]);
+         exit(0);
+    }
     if (argc > 1) {
-        while ((opt = getopt(argc, argv, ":u:d:t:i:")) != -1) {
+        while ((opt = getopt(argc, argv, ":u:d:t:i:c:")) != -1) {
             switch(opt) {
 		case 'u':
 		    up = atof(optarg);
@@ -117,9 +123,13 @@ int main(int argc, char *argv[])
                         optarg++;
                     }
                     break;
-                default:
-                    printf("Usage: %s -u <power load up duration seconds> -d <power load down duration seconds> -t <load test duration seconds>  [ -i comma-seprated GPU list ]\n",argv[0]);
-                    exit(0);
+		case 'c':
+		    cores = atoi(optarg);
+		    if (cores < 0) {
+	 	        printf("Invalid cores per GPU : %d\n", cores);
+		        exit(0);
+		    }
+		    break;
             }
         }
     } else /* no GPU args so use defaut */
@@ -130,6 +140,7 @@ int main(int argc, char *argv[])
 	exit(0);
     }
     gargs.gpu = gpu;
+    gargs.cores = cores;
     gargs.up_secs = up;
     gargs.down_secs = down;
     /* printf("up: %d seconds, down: %d seconds, load_time: %d seconds\n", gargs.up_secs, gargs.down_secs, load_time); */
@@ -155,7 +166,7 @@ int main(int argc, char *argv[])
     int rtn = MPI_Barrier(MPI_COMM_WORLD);
     
     sleep(load_time);
-    printf("Specified run load time (-t %d) reached\n",load_time);
+    printf("Specified run load time (-t %d) reached\n", load_time);
     for (i=0; i < gpu_cnt; i++) {
             ret = pthread_kill(tids[i], SIGUSR1);
             if (ret != 0)
