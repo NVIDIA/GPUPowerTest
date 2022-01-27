@@ -47,7 +47,7 @@ void *launch_kernel(struct gpt_args *gargs)
 int main(int argc, char *argv[])
 {
     int provided = -1;
-    (void) MPI_Init_thread(NULL, NULL, MPI_THREAD_MULTIPLE, &provided);
+    (void) MPI_Init_thread(NULL, NULL, MPI_THREAD_SINGLE, &provided);
     int initiallzed = -1;
     (void) MPI_Initialized(&initiallzed);
     /* printf("MPI initilized with provided %d initialzed %d\n", provided, initiallzed); */
