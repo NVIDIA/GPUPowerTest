@@ -14,11 +14,18 @@ GPUPowerTest is derived from CUDA samples from which the above notice is taken
 and is the context of the EULA.
 */
 $ ./gpt -h
-usage: ./gpt ... (GPU 0) or
+Usage: ./gpt -u <power load up duration seconds>
+        -d <power load down duration seconds>
+        -t <load test duration seconds>
+        [ -c N spin N CPU cores per GPU]
+        [ -i comma-seprated GPU list]
+
+
 $  mpirun --allow-run-as-root -np 8 -H localhost:8  ./gpt # ... (GPU per MPI RANK)
 -u: up time (float)
 -d: down time (float)
 -t: time (duration in seconds (int)
+-c: N spin N CPU cores per GPU
 -p: number of FP32 streams (int) max 45
 -f: number of TF32 streams (int) max 50
 -s: inject spin_kernels in the FP32 stream, (int) default 0
