@@ -9,8 +9,8 @@
 #include <pthread.h>
 #include <mpi.h>
 
-#define MAX_GPUS 8
-#define MAX_GPU_INDEX 7
+#define MAX_GPUS 1
+#define MAX_GPU_INDEX 15
 #define SECSINADAY (24 * (60 * 60))
 
 struct gpt_args {
@@ -60,8 +60,7 @@ int main(int argc, char *argv[])
 
     double up = 1.0, down = 1.0;
     int load_time = 60;
-    int gpus[MAX_GPUS] = { 0, 1, 2, 3, 4, 5, 6, 7 };
-    int gpu_cnt = 0;
+    int gpu_cnt = 1;
     int cores = 0;
     int opt, n, g, i, ret;
     struct gpt_args gargs;
@@ -81,7 +80,7 @@ int main(int argc, char *argv[])
     pthread_attr_t attr;
 
     if (argc == 2 && argv[1][1] == 'h') {
-         printf("Usage: %s -u <power load up duration seconds> \n\t-d <power load down duration seconds> \n\t-t <load test duration seconds> \n\t[ -c N spin N CPU cores per GPU] \n\t[ -i comma-seprated GPU list]\n",argv[0]);
+         printf("Usage: %s -u <power load up duration seconds> \n\t-d <power load down duration seconds> \n\t-t <load test duration seconds> \n\t[ -c N spin N CPU cores per GPU] \n\t[ -i GPU number]\n",argv[0]);
          exit(0);
     }
     if (argc > 1) {
@@ -96,7 +95,7 @@ int main(int argc, char *argv[])
 		    break;
 		case 'd':
 		    down = atof(optarg);
-		    if (down <= 0) {
+		    if (down <= 0.0) {
 	 	        printf("Invalid down duration value: %f\n",down);
 		        exit(0);
 		    }
@@ -105,22 +104,18 @@ int main(int argc, char *argv[])
                     load_time = atoi(optarg);
                     break;
                 case 'i':
-                    n = strlen(optarg);
-                    while (n > 0) {
-                        if (strncmp(optarg, ",", 1) != 0) {
-                            g = atoi(optarg);
-                            if (( g < 0) || ( g > MAX_GPU_INDEX)) {
-                                printf("Invalid GPU Index Value: %d\n",g);
-                                printf("Valid range is 0 - 7\n");
-                                printf("Exiting\n");
-                                exit(0);
-                            } else {
-                                gpus[gpu_cnt] = g;
-                                gpu_cnt++;
-                            }
+                    if (mpi_local_rank) {
+                        printf("GPU number set by OMPI_COMM_WORLD_LOCAL_RANK as %d (-i ignored)", gpu);
+                    } else {
+                        g = atoi(optarg);
+                        if (( g < 0) || ( g > MAX_GPU_INDEX)) {
+                            printf("Invalid GPU Index Value: %d\n",g);
+                            printf("Valid range is 0 - 15\n");
+                            printf("Exiting\n");
+                            exit(0);
+                        } else {
+                            gpu = g;
                         }
-                        n--;
-                        optarg++;
                     }
                     break;
 		case 'c':
