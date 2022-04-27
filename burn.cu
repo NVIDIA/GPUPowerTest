@@ -30,7 +30,7 @@ using std::endl;
 
 #ifdef __cplusplus
 extern "C" {
-    void burn(int gpu, int cores, double u_secs, double d_secs);
+    void burn(int gpu, int cores, int low, double u_secs, double d_secs);
 }
 #endif
 
@@ -78,24 +78,26 @@ private:
     float beta = 0.0;
 
     int cores = 0;
+    int low = 0;
 
 // matrix dims must agree with const int ld (see below)
 // for the transpose and op states
 #define SEED_UP 10000
-#define SEED_DN 100
+#define SEED_DN_LOW 100
+#define SEED_DN_HOT 1000
 
     const int Mm_up = SEED_UP;
     const int Mn_up = SEED_UP;
     const int Mk_up = SEED_UP;
-    const int Mm_dn = SEED_DN;
-    const int Mn_dn = SEED_DN;
-    const int Mk_dn = SEED_DN;
     const size_t As_up = SEED_UP * SEED_UP;
     const size_t Bs_up = SEED_UP * SEED_UP;
     const size_t Cs_up = SEED_UP * SEED_UP;
-    const size_t As_dn = SEED_DN * SEED_DN;
-    const size_t Bs_dn = SEED_DN * SEED_DN;
-    const size_t Cs_dn = SEED_DN * SEED_DN;
+    const int Mm_dn = (low) ?  SEED_DN_LOW : SEED_DN_HOT;
+    const int Mn_dn = (low) ?  SEED_DN_LOW : SEED_DN_HOT;
+    const int Mk_dn = (low) ?  SEED_DN_LOW : SEED_DN_HOT;
+    const size_t As_dn = (low) ?  SEED_DN_LOW : SEED_DN_HOT * (low) ?  SEED_DN_LOW : SEED_DN_HOT;
+    const size_t Bs_dn = (low) ?  SEED_DN_LOW : SEED_DN_HOT * (low) ?  SEED_DN_LOW : SEED_DN_HOT;
+    const size_t Cs_dn = (low) ?  SEED_DN_LOW : SEED_DN_HOT * (low) ?  SEED_DN_LOW : SEED_DN_HOT;
 
     cublasLtMatmulDesc_t matmulDesc_up = NULL;
     cublasLtMatrixLayout_t Adesc_up = NULL;
@@ -111,7 +113,7 @@ private:
     const size_t workspaceSize = 8192 * 8192 * 4;
     const cublasOperation_t op = CUBLAS_OP_N;
     const int ld_up = SEED_UP;
-    const int ld_dn = SEED_DN;
+    const int ld_dn = (low) ?  SEED_DN_LOW : SEED_DN_HOT;
     cublasLtOrder_t order = CUBLASLT_ORDER_COL;
     // for the square wave
     double up_seconds;
@@ -120,7 +122,7 @@ private:
     pthread_t* tids = 0;
 
 public:
-    BurnGPU(int gpu, int cores, double u_secs, double d_secs) : cores(cores) {
+    BurnGPU(int gpu, int cores, int low, double u_secs, double d_secs) : cores(cores) {
         cudaDeviceProp devprop {};
         CHECK_ERROR(cudaSetDevice(gpu));
         CHECK_ERROR(cudaGetDeviceProperties(&devprop, gpu));
@@ -416,7 +418,7 @@ public:
                     workspaceSize,
                     0);
                 if (cublas_status != CUBLAS_STATUS_SUCCESS) {
-                    cout << "cublasLtMatmul failed "
+                    cout << "cublasLtMatmul UP failed "
                         << cublas_status << endl;
                     exit(-1);
                 }
@@ -449,7 +451,7 @@ public:
                             workspaceSize,
                             0);
                         if (cublas_status != CUBLAS_STATUS_SUCCESS) {
-                            cout << "cublasLtMatmul failed "
+                            cout << "cublasLtMatmul DN failed "
                                 << cublas_status << endl;
                             exit(-1);
                         }
@@ -551,8 +553,8 @@ public:
 
 };
 
-void burn(int gpu, int cores, double u_secs, double d_secs) {
-    BurnGPU *burngpu = new BurnGPU(gpu, cores, u_secs, d_secs);
+void burn(int gpu, int cores, int low, double u_secs, double d_secs) {
+    BurnGPU *burngpu = new BurnGPU(gpu, cores, low, u_secs, d_secs);
     (*burngpu)();
 }
 

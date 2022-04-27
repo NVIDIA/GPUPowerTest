@@ -16,11 +16,12 @@
 struct gpt_args {
     int gpu;
     int cores;
+    int low;
     double up_secs;
     double down_secs;
 };
 
-void burn(int gpu, int cores, double upsecs, double downsecs);
+void burn(int gpu, int cores, int low, double upsecs, double downsecs);
 
 void sig_usr1()
 {
@@ -41,7 +42,7 @@ void *launch_kernel(struct gpt_args *gargs)
     printf("Launching GPU Kernel, Thread ID %ld GPU %d mpi_rank %d\n", 
             ptid, gargs->gpu, mpi_rank);
     */
-    burn(gargs->gpu, gargs->cores, gargs->up_secs, gargs->down_secs);
+    burn(gargs->gpu, gargs->cores, gargs->low, gargs->up_secs, gargs->down_secs);
 }
 
 int main(int argc, char *argv[])
@@ -62,6 +63,7 @@ int main(int argc, char *argv[])
     int load_time = 60;
     int gpu_cnt = 1;
     int cores = 0;
+    int low = 0;
     int opt, n, g, i, ret;
     struct gpt_args gargs;
 
@@ -80,11 +82,17 @@ int main(int argc, char *argv[])
     pthread_attr_t attr;
 
     if (argc == 2 && argv[1][1] == 'h') {
-         printf("Usage: %s -u <power load up duration seconds> \n\t-d <power load down duration seconds> \n\t-t <load test duration seconds> \n\t[ -c N spin N CPU cores per GPU] \n\t[ -i GPU number]\n",argv[0]);
+         printf("Usage: %s [-u <power load up duration in float seconds> default 1.0]"
+             "\n\t[-d <power load down duration in float seconds> default 1.0] "
+             "\n\t[-t <load test duration in int seconds> default 60]"
+             "\n\t[ -c N spin N CPU cores per GPU in int default 0]"
+             "\n\t[-i GPU number in int default 0]"
+             "\n\t[-L <low power on down phase> default is to keep in the upper range]\n", argv[0]);
          exit(0);
     }
+
     if (argc > 1) {
-        while ((opt = getopt(argc, argv, ":u:d:t:i:c:")) != -1) {
+        while ((opt = getopt(argc, argv, ":u:d:t:i:c:L")) != -1) {
             switch(opt) {
 		case 'u':
 		    up = atof(optarg);
@@ -125,10 +133,14 @@ int main(int argc, char *argv[])
 		        exit(0);
 		    }
 		    break;
+
+		case 'L':
+		    low = 1;
+		    break;
+
             }
         }
     } else /* no GPU args so use defaut */
-        gpu_cnt = MAX_GPUS;
 
     if ((up + down) > load_time) {
 	printf("up/down cycle time exceeds total load time\n");
@@ -136,6 +148,7 @@ int main(int argc, char *argv[])
     }
     gargs.gpu = gpu;
     gargs.cores = cores;
+    gargs.low = low;
     gargs.up_secs = up;
     gargs.down_secs = down;
     /* printf("up: %d seconds, down: %d seconds, load_time: %d seconds\n", gargs.up_secs, gargs.down_secs, load_time); */
