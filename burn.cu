@@ -83,7 +83,7 @@ private:
 // matrix dims must agree with const int ld (see below)
 // for the transpose and op states
 #define SEED_UP 10000
-#define SEED_DN_LOW 100
+#define SEED_DN_LOW 10
 #define SEED_DN_HOT 1000
 
     const int Mm_up = SEED_UP;
@@ -121,8 +121,9 @@ private:
     int gpuid = -1;
     pthread_t* tids = 0;
 
+
 public:
-    BurnGPU(int gpu, int cores, int low, double u_secs, double d_secs) : cores(cores) {
+    BurnGPU(int gpu, int cores, int low, double u_secs, double d_secs) : cores(cores), low(low) {
         cudaDeviceProp devprop {};
         CHECK_ERROR(cudaSetDevice(gpu));
         CHECK_ERROR(cudaGetDeviceProperties(&devprop, gpu));
@@ -549,6 +550,8 @@ public:
         CHECK_ERROR(cudaFree(A_dn));
         CHECK_ERROR(cudaFree(B_dn));
         CHECK_ERROR(cudaFree(C_dn));
+        CHECK_ERROR(cudaDeviceReset());
+        CHECK_ERROR(cudaDeviceSynchronize());
     }
 
 };
