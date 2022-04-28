@@ -430,7 +430,7 @@ public:
 		if (target_up_ms <= tod.tv_sec * K + tod.tv_usec / K) {
                     suseconds_t target_dn_ms =(suseconds_t) ((double) tod.tv_sec * 
                             (double) K + (double) tod.tv_usec / (double) K + dn_seconds * (double) K);
-                    printf("GPU %2d up phase done at ms. %ld target_dn_ms %ld Iterations %-8d\n",
+                    printf("GPU %2d dn phase begin at ms. %ld target_dn_ms %ld Iterations %-8d\n",
                             gpuid, tod.tv_sec * K + tod.tv_usec / K, target_dn_ms, iterations);
                     iterations = 1;
                     for (int i=0; i < cores; i++) {
@@ -466,7 +466,7 @@ public:
                     gettimeofday(&tod, NULL);
                     target_up_ms = (suseconds_t) ((double) tod.tv_sec *
                             (double) K + (double) tod.tv_usec / (double) K + up_seconds * (double) K);
-                    printf("GPU %2d dn phase done at ms. %ld target_up_ms %ld\n", 
+                    printf("GPU %2d up phase begin at ms. %ld target_up_ms %ld\n", 
                             gpuid, tod.tv_sec * K + tod.tv_usec / K, target_up_ms);
                     CORE_SPIN(); 
 
