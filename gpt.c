@@ -13,6 +13,7 @@
 #define MAX_GPU_INDEX 15
 #define SECSINADAY (24 * (60 * 60))
 
+
 struct gpt_args {
     int gpu;
     int cores;
@@ -47,6 +48,8 @@ void *launch_kernel(struct gpt_args *gargs)
 
 int main(int argc, char *argv[])
 {
+
+
     int provided = -1;
     (void) MPI_Init_thread(NULL, NULL, MPI_THREAD_SINGLE, &provided);
     int initiallzed = -1;
@@ -82,12 +85,12 @@ int main(int argc, char *argv[])
     pthread_attr_t attr;
 
     if (argc == 2 && argv[1][1] == 'h') {
-         printf("Usage: %s [-u <power load up duration in float seconds> default 1.0]"
-             "\n\t[-d <power load down duration in float seconds> default 1.0] "
-             "\n\t[-t <load test duration in int seconds> default 60]"
-             "\n\t[ -c N spin N CPU cores per GPU in int default 0]"
-             "\n\t[-i GPU number in int default 0]"
-             "\n\t[-L <low power on down phase> default is to keep in the upper range]\n", argv[0]);
+         printf("Usage: %s [-u <power load up duration> (in float seconds) default 1.0]"
+             "\n\t[-d <power load down duration> (in float seconds) default 1.0] "
+             "\n\t[-t <load test duration> (in int seconds) default 60]"
+             "\n\t[-c <spin N CPU cores per GPU> (in int) default 0]"
+             "\n\t[-i <GPU number> (in int) default 0]"
+             "\n\t[-L <reduce to minimum power on down phase> (boolean) default is medium power]\n", argv[0]);
          exit(0);
     }
 

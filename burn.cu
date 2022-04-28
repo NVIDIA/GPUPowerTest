@@ -126,6 +126,8 @@ public:
     BurnGPU(int gpu, int cores, int low, double u_secs, double d_secs) : cores(cores), low(low) {
         cudaDeviceProp devprop {};
         CHECK_ERROR(cudaSetDevice(gpu));
+        CHECK_ERROR(cudaDeviceReset());
+        CHECK_ERROR(cudaDeviceSynchronize());
         CHECK_ERROR(cudaGetDeviceProperties(&devprop, gpu));
         cout << "Found GPU " << gpu << " " << devprop.name << endl;
         cout << "Spinning " << cores << " CPU cores per GPU " << endl;
