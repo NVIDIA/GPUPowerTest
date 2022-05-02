@@ -10,6 +10,7 @@
 #include <sys/time.h>
 #include <mpi.h>
 #include <pthread.h>
+#include <stdlib.h>
 
 #define M 1000000
 #define K 1000
@@ -95,9 +96,9 @@ private:
     const int Mm_dn = (low) ?  SEED_DN_LOW : SEED_DN_HOT;
     const int Mn_dn = (low) ?  SEED_DN_LOW : SEED_DN_HOT;
     const int Mk_dn = (low) ?  SEED_DN_LOW : SEED_DN_HOT;
-    const size_t As_dn = (low) ?  SEED_DN_LOW : SEED_DN_HOT * (low) ?  SEED_DN_LOW : SEED_DN_HOT;
-    const size_t Bs_dn = (low) ?  SEED_DN_LOW : SEED_DN_HOT * (low) ?  SEED_DN_LOW : SEED_DN_HOT;
-    const size_t Cs_dn = (low) ?  SEED_DN_LOW : SEED_DN_HOT * (low) ?  SEED_DN_LOW : SEED_DN_HOT;
+    const size_t As_dn = (low) ?  SEED_DN_LOW : SEED_DN_HOT * ((low) ?  SEED_DN_LOW : SEED_DN_HOT);
+    const size_t Bs_dn = (low) ?  SEED_DN_LOW : SEED_DN_HOT * ((low) ?  SEED_DN_LOW : SEED_DN_HOT);
+    const size_t Cs_dn = (low) ?  SEED_DN_LOW : SEED_DN_HOT * ((low) ?  SEED_DN_LOW : SEED_DN_HOT);
 
     cublasLtMatmulDesc_t matmulDesc_up = NULL;
     cublasLtMatrixLayout_t Adesc_up = NULL;
@@ -121,6 +122,45 @@ private:
     int gpuid = -1;
     pthread_t* tids = 0;
 
+    class Drop {
+
+    public:
+        const suseconds_t DROP_ZERO_TO_ONE_PER_MS = 6000;
+        const suseconds_t DROP_ONE_TO_LIM_SEC_DELAY = 4;
+
+        Drop(suseconds_t base_ms) {
+            BurnGPU::Drop::lim_ms = base_ms + DROP_ZERO_TO_ONE_PER_MS;
+            srand(static_cast<int>(base_ms / K));
+            calc_drop(base_ms); 
+        }
+
+        void apply(suseconds_t ms) {
+            if (ms >= lim_ms) {
+                lim_ms = ms + DROP_ZERO_TO_ONE_PER_MS;
+                calc_drop(ms);
+            }
+            if (drop_target_ms && ms >= drop_target_ms) {
+                cout << "Drop for " << drop_delay_sec << " seconds" << endl;              
+                (void) sleep(drop_delay_sec);
+                drop_target_ms = 0;
+            }
+        }
+
+    private:
+
+        suseconds_t lim_ms;
+        suseconds_t drop_target_ms;
+        int drop_delay_sec;
+
+        void calc_drop(suseconds_t ms){
+            drop_delay_sec = (ms * K) % DROP_ONE_TO_LIM_SEC_DELAY;    
+            drop_delay_sec = (drop_delay_sec) ? drop_delay_sec : 1;
+            drop_target_ms = (suseconds_t)(rand() % 1);
+            drop_target_ms = (suseconds_t)(drop_target_ms) ? ms + (rand() % DROP_ZERO_TO_ONE_PER_MS) : 0;
+        }
+
+
+    };
 
 public:
     BurnGPU(int gpu, int cores, int low, double u_secs, double d_secs) : cores(cores), low(low) {
@@ -395,6 +435,7 @@ public:
             /* Add one to the target up second and usleep to start on a second boundary with
             ** the target ms. set to 0; this elimnates the ms. slop comming out of the MPI barrier
             */
+            BurnGPU::Drop drop = BurnGPU::Drop((suseconds_t)(((double) tod.tv_sec) * K));
             suseconds_t target_up_ms = (suseconds_t) (((double) tod.tv_sec + up_seconds + 1.0) * K);
             printf("GPU %2d arrival second %ld ms. %ld target_up_ms %ld\n", gpuid, tod.tv_sec,
                     tod.tv_usec / K, target_up_ms);
@@ -427,6 +468,7 @@ public:
                 }
                 CHECK_ERROR(cudaDeviceSynchronize());
                 gettimeofday(&tod, NULL);
+                drop.apply(tod.tv_sec * K + tod.tv_usec / K);
 		if (target_up_ms <= tod.tv_sec * K + tod.tv_usec / K) {
                     suseconds_t target_dn_ms =(suseconds_t) ((double) tod.tv_sec * 
                             (double) K + (double) tod.tv_usec / (double) K + dn_seconds * (double) K);
@@ -464,12 +506,12 @@ public:
                     }
 		    int rtn = MPI_Barrier(MPI_COMM_WORLD);
                     gettimeofday(&tod, NULL);
+                    drop.apply(tod.tv_sec * K + tod.tv_usec / K);
                     target_up_ms = (suseconds_t) ((double) tod.tv_sec *
                             (double) K + (double) tod.tv_usec / (double) K + up_seconds * (double) K);
                     printf("GPU %2d up phase begin at ms. %ld target_up_ms %ld\n", 
                             gpuid, tod.tv_sec * K + tod.tv_usec / K, target_up_ms);
                     CORE_SPIN(); 
-
 	        }
             }
             CHECK_ERROR(cudaDeviceSynchronize());

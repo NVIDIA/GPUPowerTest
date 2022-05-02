@@ -9,6 +9,7 @@
 #include <pthread.h>
 #include <mpi.h>
 
+
 #define MAX_GPUS 1
 #define MAX_GPU_INDEX 15
 #define SECSINADAY (24 * (60 * 60))
