@@ -135,7 +135,6 @@ private:
         }
 
         void apply(suseconds_t ms) {
-cout << "DEBUG: Drop apply at " << ms << " lim_ms " << lim_ms << endl;
             if (ms >= lim_ms) {
                 lim_ms = ms + DROP_ZERO_TO_ONE_PER_MS;
                 calc_drop(ms);
@@ -154,8 +153,6 @@ cout << "DEBUG: Drop apply at " << ms << " lim_ms " << lim_ms << endl;
         int drop_delay_sec;
 
         void calc_drop(suseconds_t ms){
-
-cout << "DEBUG: calc_drop at " << ms << endl;
 
             drop_delay_sec =  (ms / K )  % DROP_ONE_TO_LIM_SEC_DELAY;    
             drop_delay_sec = (drop_delay_sec) ? drop_delay_sec : 1;
