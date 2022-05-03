@@ -19,11 +19,12 @@ struct gpt_args {
     int gpu;
     int cores;
     int low;
+    int drop;
     double up_secs;
     double down_secs;
 };
 
-void burn(int gpu, int cores, int low, double upsecs, double downsecs);
+void burn(int gpu, int cores, int low, int drop, double upsecs, double downsecs);
 
 void sig_usr1()
 {
@@ -44,7 +45,7 @@ void *launch_kernel(struct gpt_args *gargs)
     printf("Launching GPU Kernel, Thread ID %ld GPU %d mpi_rank %d\n", 
             ptid, gargs->gpu, mpi_rank);
     */
-    burn(gargs->gpu, gargs->cores, gargs->low, gargs->up_secs, gargs->down_secs);
+    burn(gargs->gpu, gargs->cores, gargs->low, gargs->drop, gargs->up_secs, gargs->down_secs);
 }
 
 int main(int argc, char *argv[])
@@ -68,6 +69,7 @@ int main(int argc, char *argv[])
     int gpu_cnt = 1;
     int cores = 0;
     int low = 0;
+    int drop = 0;
     int opt, n, g, i, ret;
     struct gpt_args gargs;
 
@@ -91,12 +93,13 @@ int main(int argc, char *argv[])
              "\n\t[-t <load test duration> (in int seconds) default 60]"
              "\n\t[-c <spin N CPU cores per GPU> (in int) default 0]"
              "\n\t[-i <GPU number> (in int) default 0]"
-             "\n\t[-L <reduce to minimum power on down phase> (boolean) default is medium power]\n", argv[0]);
+             "\n\t[-L <reduce to minimum power on down phase> (boolean) default is medium power]"
+             "\n\t[-D <random power dropouts: 0 - 1, 1 - 4 sec, every 6 sec> (boolean) default is not]\n",  argv[0]);
          exit(0);
     }
 
     if (argc > 1) {
-        while ((opt = getopt(argc, argv, ":u:d:t:i:c:L")) != -1) {
+        while ((opt = getopt(argc, argv, ":u:d:t:i:c:L:D")) != -1) {
             switch(opt) {
 		case 'u':
 		    up = atof(optarg);
@@ -137,11 +140,12 @@ int main(int argc, char *argv[])
 		        exit(0);
 		    }
 		    break;
-
 		case 'L':
 		    low = 1;
 		    break;
-
+		case 'D':
+		    drop = 1;
+		    break;
             }
         }
     } else /* no GPU args so use defaut */
@@ -153,6 +157,7 @@ int main(int argc, char *argv[])
     gargs.gpu = gpu;
     gargs.cores = cores;
     gargs.low = low;
+    gargs.drop = drop;
     gargs.up_secs = up;
     gargs.down_secs = down;
     /* printf("up: %d seconds, down: %d seconds, load_time: %d seconds\n", gargs.up_secs, gargs.down_secs, load_time); */

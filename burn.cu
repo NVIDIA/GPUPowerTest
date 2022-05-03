@@ -31,7 +31,7 @@ using std::endl;
 
 #ifdef __cplusplus
 extern "C" {
-    void burn(int gpu, int cores, int low, double u_secs, double d_secs);
+    void burn(int gpu, int cores, int low, int drop, double u_secs, double d_secs);
 }
 #endif
 
@@ -80,6 +80,7 @@ private:
 
     int cores = 0;
     int low = 0;
+    int drop = 0;
 
 // matrix dims must agree with const int ld (see below)
 // for the transpose and op states
@@ -162,7 +163,8 @@ private:
     };
 
 public:
-    BurnGPU(int gpu, int cores, int low, double u_secs, double d_secs) : cores(cores), low(low) {
+    BurnGPU(int gpu, int cores, int low, int drop, double u_secs, double d_secs) : cores(cores), 
+                low(low), drop(drop) {
         cudaDeviceProp devprop {};
         CHECK_ERROR(cudaSetDevice(gpu));
         CHECK_ERROR(cudaDeviceReset());
@@ -434,7 +436,7 @@ public:
             /* Add one to the target up second and usleep to start on a second boundary with
             ** the target ms. set to 0; this elimnates the ms. slop comming out of the MPI barrier
             */
-            BurnGPU::Drop drop = BurnGPU::Drop((suseconds_t)(((double) tod.tv_sec) * K));
+            BurnGPU::Drop power_drop = BurnGPU::Drop((suseconds_t)(((double) tod.tv_sec) * K));
             suseconds_t target_up_ms = (suseconds_t) (((double) tod.tv_sec + up_seconds + 1.0) * K);
             printf("GPU %2d arrival second %ld ms. %ld target_up_ms %ld\n", gpuid, tod.tv_sec,
                     tod.tv_usec / K, target_up_ms);
@@ -443,6 +445,7 @@ public:
                     gpuid, (ctime(&tod.tv_sec)), up_seconds, dn_seconds);
             int ret = 0;
             CORE_SPIN();
+
             while (iterations++) {
                 cublas_status = cublasLtMatmul(handle_up,
                     matmulDesc_up,
@@ -467,7 +470,7 @@ public:
                 }
                 CHECK_ERROR(cudaDeviceSynchronize());
                 gettimeofday(&tod, NULL);
-                drop.apply(tod.tv_sec * K + tod.tv_usec / K);
+                if (drop) power_drop.apply(tod.tv_sec * K + tod.tv_usec / K);
 		if (target_up_ms <= tod.tv_sec * K + tod.tv_usec / K) {
                     suseconds_t target_dn_ms =(suseconds_t) ((double) tod.tv_sec * 
                             (double) K + (double) tod.tv_usec / (double) K + dn_seconds * (double) K);
@@ -505,7 +508,7 @@ public:
                     }
 		    int rtn = MPI_Barrier(MPI_COMM_WORLD);
                     gettimeofday(&tod, NULL);
-                    drop.apply(tod.tv_sec * K + tod.tv_usec / K);
+                    if (drop) power_drop.apply(tod.tv_sec * K + tod.tv_usec / K);
                     target_up_ms = (suseconds_t) ((double) tod.tv_sec *
                             (double) K + (double) tod.tv_usec / (double) K + up_seconds * (double) K);
                     printf("GPU %2d up phase begin at ms. %ld target_up_ms %ld\n", 
@@ -599,8 +602,8 @@ public:
 
 };
 
-void burn(int gpu, int cores, int low, double u_secs, double d_secs) {
-    BurnGPU *burngpu = new BurnGPU(gpu, cores, low, u_secs, d_secs);
+void burn(int gpu, int cores, int low, int drop, double u_secs, double d_secs) {
+    BurnGPU *burngpu = new BurnGPU(gpu, cores, low, drop, u_secs, d_secs);
     (*burngpu)();
 }
 
