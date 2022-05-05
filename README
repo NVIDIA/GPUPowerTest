@@ -32,6 +32,8 @@ $  mpirun --allow-run-as-root -np 8 -H localhost:8  ./gpt # ... (GPU per MPI RAN
 
 # e.g.
 
+$  mpirun --allow-run-as-root -np 8 -H localhost:8  ./gpt -t 3000  -u .001 -d .001 -D
+
 $ mpirun --allow-run-as-root -np 8 -H localhost:8  ./gpt -t 300  -u 10 -d 1 
 
 $ mpirun --allow-run-as-root -np 8 -H localhost:8  ./gpt -t 300  -u 10 -d 1 -p 16 -f 0 -s 0

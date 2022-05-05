@@ -53,10 +53,12 @@ int main(int argc, char *argv[])
 
 
     int provided = -1;
-    (void) MPI_Init_thread(NULL, NULL, MPI_THREAD_SINGLE, &provided);
+    (void) MPI_Init_thread(NULL, NULL, MPI_THREAD_MULTIPLE, &provided);
     int initiallzed = -1;
     (void) MPI_Initialized(&initiallzed);
-    /* printf("MPI initilized with provided %d initialzed %d\n", provided, initiallzed); */
+    /*
+    printf("MPI initilized with provided %d initialzed %d\n", provided, initiallzed); 
+    */
 
 
     struct timespec ts_start, ts_end;
@@ -76,7 +78,7 @@ int main(int argc, char *argv[])
     int mpi_rank = -1;
     (void) MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
     int mpi_size = -1;
-    (void) MPI_Comm_rank(MPI_COMM_WORLD, &mpi_size);
+    (void) MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);
     char* mpi_local_rank = getenv ("OMPI_COMM_WORLD_LOCAL_RANK");
     int gpu = (mpi_local_rank) ? atoi(mpi_local_rank) : 0;
     /*

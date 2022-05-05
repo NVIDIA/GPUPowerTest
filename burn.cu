@@ -84,9 +84,10 @@ private:
 
 // matrix dims must agree with const int ld (see below)
 // for the transpose and op states
-#define SEED_UP 10000
+#define SEED_UP 8000
 #define SEED_DN_LOW 10
 #define SEED_DN_HOT 1000
+
 
     const int Mm_up = SEED_UP;
     const int Mn_up = SEED_UP;
