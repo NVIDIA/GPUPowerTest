@@ -54,9 +54,10 @@ Usage: build/gpt [-u <power load up duration> (in float seconds) default 1.0]
 
 $ mpirun --allow-run-as-root -np 8 -H localhost:8  ./gpt -t 3000  -u .001 -d .001 -D
 
+$ mpirun --allow-run-as-root -np 8 -H localhost:8  ./gpt -t 3000  -u .001 -d .001 -L
+
 $ mpirun --allow-run-as-root -np 8 -H localhost:8  ./gpt -t 300  -u 10 -d 1 
 
-$ mpirun --allow-run-as-root -np 8 -H localhost:8  ./gpt -t 300  -u 10 -d 1 -p 16 -f 0 -s 0
 
 
 # For a machine with CMT disabled use these mpi options 
