@@ -14,30 +14,68 @@ GPUPowerTest is derived from CUDA samples from which the above notice is taken
 and is the context of the EULA.
 */
 $ ./gpt -h
-Usage: ./gpt -u <power load up duration seconds>
-        -d <power load down duration seconds>
-        -t <load test duration seconds>
-        [ -c N spin N CPU cores per GPU]
-        [ -i comma-seprated GPU list]
+Usage: build/gpt [-u <power load up duration> (in float seconds) default 1.0]
+        [-d <power load down duration> (in float seconds) default 1.0]
+        [-t <load test duration> (in int seconds) default 60]
+        [-c <spin N CPU cores per GPU> (in int) default 0]
+        [-i <GPU number> (in int) default 0]
+        [-L <reduce to minimum power on down phase> (boolean) default is medium power]
+        [-D <random power dropouts: 0 - 1, 1 - 4 sec, every 6 sec> (boolean) default is not]
 
 
-$  mpirun --allow-run-as-root -np 8 -H localhost:8  ./gpt # ... (GPU per MPI RANK)
--u: up time (float)
--d: down time (float)
--t: time (duration in seconds (int)
--c: N spin N CPU cores per GPU
--p: number of FP32 streams (int) max 45
--f: number of TF32 streams (int) max 50
--s: inject spin_kernels in the FP32 stream, (int) default 0
+# Multi-GPU tests are implemented with OpenMPI; MPI RANK coorasponds to GPU ID.
+
+# High Level GPUPowerTest (gpt) SOP
+
+1. Make sure OpenMPI >= v4.1.3 is installed and healthy
+1.2 In particular the library libmpi.so.40 must be found (default location /usr/local/lib)
+1.3 verify with "mpirun --allow-run-as-root -np 8 -H localhost:8 date"
+
+
+2. Make sure CUDA >= 11.0, driver and (if applicable) nvida-fabricmanager are installed
+2.1 In particular the library libcublasLt.so.11 must be found (default location /usr/local/cuda/targets/x86_64-linux/lib)
+2.2 On multi-GPU NVLink systems
+2.2.1 systemctl status nvidia-fabricmanager # will check the status
+2.2.2 systemctl start nvidia-fabricmanager  # will start the Fabric Manager
+2.3 ensure GPUs are visible with nvidia-smi
+
+
+3. Ensure the needed libraries are found (your paths may vary, example based on defaults)
+3.1 export LD_LIBRARY_PATH=/usr/local/cuda/targets/x86_64-linux/lib:/usr/local/lib
+3.2 check with "ldd ./gpt"
+
+4. Run "./gpt -h" to check options and execute under mpirun
+4.1 mpirun -np N [ -H 127.0.0.1:M,127.0.0.1:P ] ./gpt ...  where N is the number of GPU to engage in total
+                                                           where M + P = N;  the N GPU can be spread over multiple MPI enabled similar servers,
+                                                           some number of GPU each, as long as the total equals N
+4.2 example: "mpirun --allow-run-as-root -np 8 -H localhost:8 ./gpt -t 14400 -d 0.1 -u 35 -D"
 
 # e.g.
 
-$ mpirun --allow-run-as-root -np 8 -H localhost:8  ./gpt -t 300  -u 10 -d 1
+$ mpirun --allow-run-as-root -np 8 -H localhost:8  ./gpt -t 3000  -u .001 -d .001 -D
+
+$ mpirun --allow-run-as-root -np 8 -H localhost:8  ./gpt -t 300  -u 10 -d 1 
 
 $ mpirun --allow-run-as-root -np 8 -H localhost:8  ./gpt -t 300  -u 10 -d 1 -p 16 -f 0 -s 0
 
 
-# For a machine with CMT disabled use these mpi options to spin multi core
-mpirun -np 8 -x LD_LIBRARY_PATH --map-by ppr:2:numa:pe=11:overload-allowed ./gpt -u 5 -d .5 -t 600
+# For a machine with CMT disabled use these mpi options 
+$ mpirun -np 8 -x LD_LIBRARY_PATH --map-by ppr:2:numa:pe=11:overload-allowed ./gpt -u 5 -d .5 -t 600
+
+Also included is a NVlink load generator, nvlbm.cu. Currently needs to be compiled seperately, e.g.
+nvcc -o nvlbm nvlbm.cu -lpthread
+or run the bld_nvlbm.sh script. The nvlbm binary can be run standalone to generate NVlink traffic,
+or simultaneously with gpt to generate additional load and power consumption.
+By default, nvlbm will generate traffic between all installed GPUs. The only option is the
+"-t" flag to specify the run duration in seconds, e.g.
+
+nvlbm -t 300
+
+to run for 5 minutes.
+With DCGM installed, NVlink traffic, along with power can be monitored easily:
+
+dcgmi dmon -e 100,155,1002,1011,1012
+
+The above will sample every second.
 
 

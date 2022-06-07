@@ -1,3 +1,25 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: MIT
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
+ */
 #include <sys/time.h>
 #include <stdio.h>
 #include <fcntl.h>
@@ -9,17 +31,22 @@
 #include <pthread.h>
 #include <mpi.h>
 
-#define MAX_GPUS 8
-#define MAX_GPU_INDEX 7
+
+#define MAX_GPUS 1
+#define MAX_GPU_INDEX 15
 #define SECSINADAY (24 * (60 * 60))
+
 
 struct gpt_args {
     int gpu;
-    int up_secs;
-    int down_secs;
+    int cores;
+    int low;
+    int drop;
+    double up_secs;
+    double down_secs;
 };
 
-void burn(int gpu, int upsecs, int downsecs);
+void burn(int gpu, int cores, int low, int drop, double upsecs, double downsecs);
 
 void sig_usr1()
 {
@@ -40,17 +67,20 @@ void *launch_kernel(struct gpt_args *gargs)
     printf("Launching GPU Kernel, Thread ID %ld GPU %d mpi_rank %d\n", 
             ptid, gargs->gpu, mpi_rank);
     */
-    burn(gargs->gpu, gargs->up_secs, gargs->down_secs);
+    burn(gargs->gpu, gargs->cores, gargs->low, gargs->drop, gargs->up_secs, gargs->down_secs);
 }
-
 
 int main(int argc, char *argv[])
 {
+
+
     int provided = -1;
     (void) MPI_Init_thread(NULL, NULL, MPI_THREAD_MULTIPLE, &provided);
     int initiallzed = -1;
     (void) MPI_Initialized(&initiallzed);
-    /* printf("MPI initilized with provided %d initialzed %d\n", provided, initiallzed); */
+    /*
+    printf("MPI initilized with provided %d initialzed %d\n", provided, initiallzed); 
+    */
 
 
     struct timespec ts_start, ts_end;
@@ -58,16 +88,19 @@ int main(int argc, char *argv[])
     struct sigevent   ev;
 
 
-    int up = 0, down = 0, load_time = 60;
-    int gpus[MAX_GPUS] = { 0, 1, 2, 3, 4, 5, 6, 7 };
-    int gpu_cnt = 0;
+    double up = 1.0, down = 1.0;
+    int load_time = 60;
+    int gpu_cnt = 1;
+    int cores = 0;
+    int low = 0;
+    int drop = 0;
     int opt, n, g, i, ret;
     struct gpt_args gargs;
 
     int mpi_rank = -1;
     (void) MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
     int mpi_size = -1;
-    (void) MPI_Comm_rank(MPI_COMM_WORLD, &mpi_size);
+    (void) MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);
     char* mpi_local_rank = getenv ("OMPI_COMM_WORLD_LOCAL_RANK");
     int gpu = (mpi_local_rank) ? atoi(mpi_local_rank) : 0;
     /*
@@ -78,20 +111,31 @@ int main(int argc, char *argv[])
     pthread_t tids[MAX_GPUS];
     pthread_attr_t attr;
 
+    if (argc == 2 && argv[1][1] == 'h') {
+         printf("Usage: %s [-u <power load up duration> (in float seconds) default 1.0]"
+             "\n\t[-d <power load down duration> (in float seconds) default 1.0] "
+             "\n\t[-t <load test duration> (in int seconds) default 60]"
+             "\n\t[-c <spin N CPU cores per GPU> (in int) default 0]"
+             "\n\t[-i <GPU number> (in int) default 0]"
+             "\n\t[-L <reduce to minimum power on down phase> (boolean) default is medium power]"
+             "\n\t[-D <random power dropouts: 0 - 1, 1 - 4 sec, every 6 sec> (boolean) default is not]\n",  argv[0]);
+         exit(0);
+    }
+
     if (argc > 1) {
-        while ((opt = getopt(argc, argv, ":u:d:t:i:")) != -1) {
+        while ((opt = getopt(argc, argv, ":u:d:t:i:c:L:D")) != -1) {
             switch(opt) {
 		case 'u':
-		    up = atoi(optarg);
-		    if (up <= 0) {
-	 	        printf("Invalid up duration value: %d\n",up);
+		    up = atof(optarg);
+		    if (up <= 0.0) {
+	 	        printf("Invalid up duration value: %f\n",up);
 		        exit(0);
 		    }
 		    break;
 		case 'd':
-		    down = atoi(optarg);
-		    if (down <= 0) {
-	 	        printf("Invalid down duration value: %d\n",down);
+		    down = atof(optarg);
+		    if (down <= 0.0) {
+	 	        printf("Invalid down duration value: %f\n",down);
 		        exit(0);
 		    }
 		    break; 
@@ -99,37 +143,45 @@ int main(int argc, char *argv[])
                     load_time = atoi(optarg);
                     break;
                 case 'i':
-                    n = strlen(optarg);
-                    while (n > 0) {
-                        if (strncmp(optarg, ",", 1) != 0) {
-                            g = atoi(optarg);
-                            if (( g < 0) || ( g > MAX_GPU_INDEX)) {
-                                printf("Invalid GPU Index Value: %d\n",g);
-                                printf("Valid range is 0 - 7\n");
-                                printf("Exiting\n");
-                                exit(0);
-                            } else {
-                                gpus[gpu_cnt] = g;
-                                gpu_cnt++;
-                            }
+                    if (mpi_local_rank) {
+                        printf("GPU number set by OMPI_COMM_WORLD_LOCAL_RANK as %d (-i ignored)", gpu);
+                    } else {
+                        g = atoi(optarg);
+                        if (( g < 0) || ( g > MAX_GPU_INDEX)) {
+                            printf("Invalid GPU Index Value: %d\n",g);
+                            printf("Valid range is 0 - 15\n");
+                            printf("Exiting\n");
+                            exit(0);
+                        } else {
+                            gpu = g;
                         }
-                        n--;
-                        optarg++;
                     }
                     break;
-                default:
-                    printf("Usage: %s -u <power load up duration seconds> -d <power load down duration seconds> -t <load test duration seconds>  [ -i comma-seprated GPU list ]\n",argv[0]);
-                    exit(0);
+		case 'c':
+		    cores = atoi(optarg);
+		    if (cores < 0) {
+	 	        printf("Invalid cores per GPU : %d\n", cores);
+		        exit(0);
+		    }
+		    break;
+		case 'L':
+		    low = 1;
+		    break;
+		case 'D':
+		    drop = 1;
+		    break;
             }
         }
     } else /* no GPU args so use defaut */
-        gpu_cnt = MAX_GPUS;
 
     if ((up + down) > load_time) {
 	printf("up/down cycle time exceeds total load time\n");
 	exit(0);
     }
     gargs.gpu = gpu;
+    gargs.cores = cores;
+    gargs.low = low;
+    gargs.drop = drop;
     gargs.up_secs = up;
     gargs.down_secs = down;
     /* printf("up: %d seconds, down: %d seconds, load_time: %d seconds\n", gargs.up_secs, gargs.down_secs, load_time); */
@@ -155,7 +207,7 @@ int main(int argc, char *argv[])
     int rtn = MPI_Barrier(MPI_COMM_WORLD);
     
     sleep(load_time);
-    printf("Specified run load time (-t %d) reached\n",load_time);
+    printf("Specified run load time (-t %d) reached\n", load_time);
     for (i=0; i < gpu_cnt; i++) {
             ret = pthread_kill(tids[i], SIGUSR1);
             if (ret != 0)
