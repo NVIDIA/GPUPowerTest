@@ -63,9 +63,11 @@ $ mpirun --allow-run-as-root -np 8 -H localhost:8  ./gpt -t 300  -u 10 -d 1
 # For a machine with CMT disabled use these mpi options 
 $ mpirun -np 8 -x LD_LIBRARY_PATH --map-by ppr:2:numa:pe=11:overload-allowed ./gpt -u 5 -d .5 -t 600
 
+For NVlink load...
+
 Also included is a NVlink load generator, nvlbm.cu. Currently needs to be compiled seperately, e.g.
-nvcc -o nvlbm nvlbm.cu -lpthread
-or run the bld_nvlbm.sh script. The nvlbm binary can be run standalone to generate NVlink traffic,
+nvcc -o nvlbm nvlbm.cu -lpthread or run the bld_nvlbm.sh script. 
+The nvlbm binary can be run standalone to generate NVlink traffic,
 or simultaneously with gpt to generate additional load and power consumption.
 By default, nvlbm will generate traffic between all installed GPUs. The only option is the
 "-t" flag to specify the run duration in seconds, e.g.
@@ -73,10 +75,13 @@ By default, nvlbm will generate traffic between all installed GPUs. The only opt
 nvlbm -t 300
 
 to run for 5 minutes.
-With DCGM installed, NVlink traffic, along with power can be monitored easily:
+
+With DCGM installed, NVlink traffic, along with power, can be monitored easily:
 
 dcgmi dmon -e 100,155,1002,1011,1012
 
-The above will sample every second.
-
+The above will sample every second. See dcgmi dmon --list for a complete list of
+events that can be captured. Use the -d (delay) flag to change the query interval.
+The value is in milliseconds, default 1000ms (1 second). 
+See dcgmi dmon --help for more.
 
