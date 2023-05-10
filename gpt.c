@@ -75,7 +75,7 @@ int main(int argc, char *argv[])
 
 
     int provided = -1;
-    (void) MPI_Init_thread(NULL, NULL, MPI_THREAD_MULTIPLE, &provided);
+    (void) MPI_Init_thread(NULL, NULL, MPI_THREAD_SINGLE, &provided);
     int initiallzed = -1;
     (void) MPI_Initialized(&initiallzed);
     /*
